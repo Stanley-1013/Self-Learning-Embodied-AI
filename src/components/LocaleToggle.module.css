@@ -1,0 +1,86 @@
+/* Floating language toggle — fixed bottom-right, always visible.
+   Uses project design tokens for consistency. */
+
+.fab {
+  position: fixed;
+  bottom: clamp(1rem, 2vw, 1.5rem);
+  right: clamp(1rem, 2vw, 1.5rem);
+  z-index: 999;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.85rem;
+
+  border: 1px solid var(--rule-strong, #999);
+  border-radius: 999px;
+  background: var(--paper, #fff);
+  color: var(--ink, #141311);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
+
+  font-family: var(--ifm-font-family-monospace, monospace);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.1s ease;
+}
+
+.fab:hover {
+  background: var(--paper-raised, #f8f5ef);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.16),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+.fab:active {
+  transform: translateY(0);
+  box-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.1),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+.fab:focus-visible {
+  outline: 2px solid var(--accent, #b8392b);
+  outline-offset: 3px;
+}
+
+.icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.label {
+  line-height: 1;
+}
+
+/* Ensure it doesn't overlap the Docusaurus bottom "back to top" button */
+@media (max-width: 576px) {
+  .fab {
+    bottom: 4.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.78rem;
+  }
+}
+
+/* Dark mode */
+[data-theme='dark'] .fab {
+  background: var(--paper, #1e1d19);
+  border-color: var(--rule, #3a3830);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+[data-theme='dark'] .fab:hover {
+  background: var(--paper-raised, #2a2920);
+}

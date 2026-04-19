@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Production build
+build/
+
+# Docusaurus generated
+.docusaurus/
+.cache/
+
+# Logs
+*.log
+
+# Temp
+/tmp/
+
+# OS
+.DS_Store
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Render check & screenshot artifacts
+render-check.mjs
+chapter-intro.png
+display-*.png
+inline-*.png
+fab-*.png
+locale-*.png
+home-*.png
+block-math-heading.png
+
+# Python cache
+__pycache__/
+*.pyc

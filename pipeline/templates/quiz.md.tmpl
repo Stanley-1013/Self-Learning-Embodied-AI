@@ -1,0 +1,22 @@
+# Quiz block template — 填入章節的「練習題」段落
+#
+# 展開規則：
+# - 每題獨立一個 <details>，`{{n}}` 為題號、`{{question}}` 為題幹、`{{answer}}` 為解答
+# - 解答可含 KaTeX（`$...$` / `$$...$$`）與多段落
+# - 至少需輸出 3 題才能通過 quality/validate.sh
+#
+# 展開範例：
+#
+# <details>
+# <summary>Q1：{{question}}</summary>
+#
+# {{answer}}
+#
+# </details>
+
+<details>
+<summary>Q{{n}}：{{question}}</summary>
+
+{{answer}}
+
+</details>

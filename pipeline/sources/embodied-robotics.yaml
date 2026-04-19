@@ -1,0 +1,242 @@
+book: embodied-robotics
+title: 具身智能與機器人學
+description: C++ 進階、ROS 2、機械臂控制、具身智能 / RL、多模態大模型的完整學習路線
+estimated_chapters: 22
+target_depth: 3
+notebook_id: 0502daf4-1648-4456-bfd4-f1dee3875753
+notebook_url: https://notebooklm.google.com/notebook/0502daf4-1648-4456-bfd4-f1dee3875753
+sources:
+- type: textbook
+  name: 《C++ 性能優化指南》
+  chapters_used:
+  - 6
+  - 13
+  status: ingested
+- type: textbook
+  name: 《C++ 併發編程》
+  chapters_used:
+  - 2
+  - 3
+  - 4
+  - 5
+  status: ingested
+- type: textbook
+  name: 《ROS2 機器人開發：從入門到實踐》
+  chapters_used:
+  - 2
+  - 3
+  - 4
+  - 5
+  - 10
+  status: ingested
+- type: interview
+  name: 《具身智能算法工程師 面試題》
+  chapters_used:
+  - 1.1
+  - 1.2
+  - 1.3
+  - 1.4
+  - 2.1
+  - 3.1
+  - 3.6
+  - 4.1
+  - 4.2
+  - 4.3
+  - 5.1
+  - 5.3
+  - 5.4
+  - 6.1
+  - 6.2
+  - 6.3
+  - 7.1
+  - 7.4
+  - 8.3
+  - 8.4
+  - 8.5
+  - 10.2
+  - 10.4
+  - 10.6
+  - 11.5
+  - 12.3
+  status: ingested
+- type: paper
+  name: 'Sim-to-Real Transfer in Deep Reinforcement Learning for Robotics: a Survey'
+  sections_used:
+  - I
+  - III
+  status: ingested
+chapters:
+- slug: 01-cpp-memory-optimization
+  title: C++ 記憶體管理與效能優化
+  prerequisites: []
+  sources_focus:
+  - 《C++ 性能優化指南》Ch6
+  - 《C++ 性能優化指南》Ch13
+  status: generated
+- slug: 02-cpp-concurrency-sync
+  title: C++ 多執行緒與同步機制
+  prerequisites:
+  - 01-cpp-memory-optimization
+  sources_focus:
+  - 《C++ 併發編程》Ch2
+  - 《C++ 併發編程》Ch3
+  - 《C++ 併發編程》Ch4
+  status: generated
+- slug: 03-cpp-memory-model-atomics
+  title: C++ 記憶體模型與原子操作
+  prerequisites:
+  - 02-cpp-concurrency-sync
+  sources_focus:
+  - 《C++ 併發編程》Ch5
+  status: generated
+- slug: 04-ros2-basic-communication
+  title: ROS 2 節點與核心通信機制
+  prerequisites: []
+  sources_focus:
+  - 《ROS2 機器人開發》Ch2-4
+  status: generated
+- slug: 05-ros2-tf-and-tools
+  title: ROS 2 座標變換 (TF) 與常用工具
+  prerequisites:
+  - 04-ros2-basic-communication
+  sources_focus:
+  - 《ROS2 機器人開發》Ch5
+  status: generated
+- slug: 06-ros2-advanced-features
+  title: ROS 2 進階：QoS 與執行器
+  prerequisites:
+  - 05-ros2-tf-and-tools
+  sources_focus:
+  - 《ROS2 機器人開發》Ch10
+  status: generated
+- slug: 07-forward-kinematics-dh
+  title: 剛體正向運動學與 DH 參數建模
+  prerequisites:
+  - 05-ros2-tf-and-tools
+  sources_focus:
+  - 《面試題》Ch1.1
+  - 《面試題》Ch1.2
+  status: generated
+- slug: 08-inverse-kinematics
+  title: 逆向運動學求解與奇異點分析
+  prerequisites:
+  - 07-forward-kinematics-dh
+  sources_focus:
+  - 《面試題》Ch2.1
+  - 《面試題》Ch3.1
+  status: generated
+- slug: 09-robot-dynamics-modeling
+  title: 動力學建模（牛頓-歐拉與拉格朗日）
+  prerequisites:
+  - 08-inverse-kinematics
+  sources_focus:
+  - 《面試題》Ch1.4
+  - 《面試題》Ch11.5
+  status: generated
+- slug: 10-basic-path-planning
+  title: 基礎路徑規劃（A*, RRT, APF）
+  prerequisites:
+  - 07-forward-kinematics-dh
+  sources_focus:
+  - 《面試題》Ch1.3
+  - 《面試題》Ch4.2
+  status: generated
+- slug: 11-trajectory-optimization
+  title: 軌跡最佳化（時間、能量、平滑度）
+  prerequisites:
+  - 10-basic-path-planning
+  sources_focus:
+  - 《面試題》Ch5.1
+  - 《面試題》Ch5.3
+  status: generated
+- slug: 12-dynamic-obstacle-avoidance
+  title: 動態環境避障與即時重規劃
+  prerequisites:
+  - 10-basic-path-planning
+  - 11-trajectory-optimization
+  sources_focus:
+  - 《面試題》Ch8.3
+  - 《面試題》Ch8.4
+  status: generated
+- slug: 13-pid-control-tuning
+  title: PID 控制原理與抗飽和實務
+  prerequisites:
+  - 09-robot-dynamics-modeling
+  sources_focus:
+  - 《面試題》Ch1.1
+  - 《面試題》Ch6.2
+  status: generated
+- slug: 14-force-impedance-control
+  title: 力控制與阻抗／導納控制
+  prerequisites:
+  - 13-pid-control-tuning
+  sources_focus:
+  - 《面試題》Ch6.1
+  - 《面試題》Ch6.3
+  status: generated
+- slug: 15-model-predictive-control
+  title: 模型預測控制 (MPC) 與軌跡追蹤
+  prerequisites:
+  - 13-pid-control-tuning
+  - 11-trajectory-optimization
+  sources_focus:
+  - 《面試題》Ch5.4
+  - 《面試題》Ch10.2
+  status: generated
+- slug: 16-visual-servoing
+  title: 視覺伺服控制與特徵點提取
+  prerequisites:
+  - 07-forward-kinematics-dh
+  - 15-model-predictive-control
+  sources_focus:
+  - 《面試題》Ch7.1
+  - 《面試題》Ch7.4
+  status: generated
+- slug: 17-slam-and-mapping
+  title: SLAM 與未知環境地圖建構
+  prerequisites:
+  - 05-ros2-tf-and-tools
+  sources_focus:
+  - 《面試題》Ch10.4
+  status: generated
+- slug: 18-rl-mdp-basics
+  title: 強化學習基礎：MDP 與 Q-Learning
+  prerequisites: []
+  sources_focus:
+  - 《面試題》Ch4.1
+  - 《面試題》Ch4.2
+  status: generated
+- slug: 19-drl-ppo-sac-ddpg
+  title: 深度強化學習（PPO, SAC, DDPG）
+  prerequisites:
+  - 18-rl-mdp-basics
+  sources_focus:
+  - 《面試題》Ch4.3
+  - 《面試題》Ch12.3
+  status: generated
+- slug: 20-imitation-learning-dagger
+  title: 模仿學習與行為克隆
+  prerequisites:
+  - 19-drl-ppo-sac-ddpg
+  sources_focus:
+  - 《面試題》Ch8.5
+  status: generated
+- slug: 21-sim-to-real-transfer
+  title: Sim-to-Real 遷移與物理誤差處理
+  prerequisites:
+  - 19-drl-ppo-sac-ddpg
+  - 20-imitation-learning-dagger
+  sources_focus:
+  - Survey Sec I
+  - Survey Sec III
+  status: generated
+- slug: 22-multimodal-llm-robotics
+  title: 多模態大模型與具身感知決策
+  prerequisites:
+  - 20-imitation-learning-dagger
+  - 21-sim-to-real-transfer
+  sources_focus:
+  - 《面試題》Ch3.6
+  - 《面試題》Ch10.6
+  status: generated
+notebooklm_planning_session: e6cb9a47

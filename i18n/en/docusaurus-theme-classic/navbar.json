@@ -1,0 +1,18 @@
+{
+  "title": {
+    "message": "Learning System",
+    "description": "The title in the navbar"
+  },
+  "logo.alt": {
+    "message": "Learning System Logo",
+    "description": "The alt text of navbar logo"
+  },
+  "item.label.內容": {
+    "message": "Content",
+    "description": "Navbar item with label 內容"
+  },
+  "item.label.進度總覽": {
+    "message": "Progress",
+    "description": "Navbar item with label 進度總覽"
+  }
+}

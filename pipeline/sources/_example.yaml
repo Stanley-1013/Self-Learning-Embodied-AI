@@ -1,0 +1,61 @@
+# 來源登記範例
+# 每本書一個 yaml，記錄所有原始資料來源
+# ⚠️ 此檔案同時是「狀態記錄」，Claude Code 靠它判斷哪些步驟已完成
+
+book: "example-robot-kinematics"
+title: "Robot Kinematics and Dynamics"
+description: "從基礎運動學到動力學控制的完整路線"
+estimated_chapters: 8
+target_depth: 3  # 碩士課程級別
+
+# ↓ 建立 notebook 後由 Claude Code 自動回填，空值代表尚未建立
+notebook_id: null  # ← 填入後就不會重複建立
+
+sources:
+  - type: textbook
+    name: "Robotics: Modelling, Planning and Control (Siciliano)"
+    chapters_used: [2, 3, 4, 7]
+    status: pending  # pending → ingested（已匯入 NotebookLM）
+    notes: "經典教材，推導最完整"
+
+  - type: textbook  
+    name: "A Mathematical Introduction to Robotic Manipulation (Murray)"
+    chapters_used: [2, 3, 4]
+    status: pending
+    notes: "Lie group 觀點，比 Siciliano 更數學化"
+
+  - type: course
+    name: "Stanford CS223A - Introduction to Robotics"
+    url: "https://cs.stanford.edu/groups/manips/teaching/cs223a/"
+    status: pending
+    notes: "Khatib 的課，有好的 lecture notes"
+
+  - type: paper
+    name: "A Tutorial on SE(3) for Robotics"
+    url: "https://arxiv.org/abs/..."
+    relevance: "Chapter 1-2 的補充，SE(3) 的直覺解釋很好"
+    status: pending
+
+chapters:
+  - slug: "01-rigid-body-motion"
+    title: "剛體運動與座標變換"
+    sources_focus: ["Siciliano Ch2", "Murray Ch2"]
+    status: pending  # pending → extracted → generated → reviewed
+    
+  - slug: "02-forward-kinematics"  
+    title: "正向運動學"
+    sources_focus: ["Siciliano Ch2.5-2.8", "Murray Ch3"]
+    status: pending
+    
+  - slug: "03-inverse-kinematics"
+    title: "逆向運動學"
+    sources_focus: ["Siciliano Ch3", "CS223A Lecture 5"]
+    status: pending
+
+  # ... 繼續定義
+
+# 狀態流轉說明：
+# source.status:  pending → ingested（已匯入 NotebookLM）
+# chapter.status: pending → extracted（已提取到 pipeline/extracted/）
+#                         → generated（已生成最終 Markdown 到 content/）
+#                         → reviewed（已通過 validate.sh 驗證）

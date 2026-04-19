@@ -1,0 +1,10 @@
+{
+  "label": "Embodied AI & Robotics",
+  "position": 1,
+  "collapsed": false,
+  "link": {
+    "type": "generated-index",
+    "title": "Embodied AI & Robotics",
+    "description": "22-chapter learning roadmap, from C++ fundamentals to multimodal large models."
+  }
+}

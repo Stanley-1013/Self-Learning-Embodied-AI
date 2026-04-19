@@ -1,0 +1,318 @@
+/* Progress dashboard — editorial/reference direction.
+   Treats data as part of the design system: tabular numerals, hairlines,
+   a typographic percentage as the hero, book cards as catalog entries. */
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+
+/* ────────────────────
+   Summary — oversized percentage with a single horizontal rule
+   ──────────────────── */
+.summaryCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 2rem clamp(1.5rem, 3vw, 4rem);
+  padding: clamp(1.75rem, 1rem + 2vw, 3rem) 0;
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--rule);
+  align-items: end;
+}
+
+@media (max-width: 780px) {
+  .summaryCard {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+}
+
+.summaryLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.summaryLabel {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.summaryLabel::before {
+  content: "";
+  width: 24px;
+  height: 1px;
+  background: var(--accent);
+}
+
+.summaryValue {
+  font-family: var(--ifm-heading-font-family);
+  font-size: clamp(4.5rem, 2rem + 11vw, 10rem);
+  line-height: 0.85;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  font-variation-settings: "opsz" 144;
+  display: flex;
+  align-items: baseline;
+  gap: 0.1em;
+}
+.summaryUnit {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.22em;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  align-self: flex-start;
+  margin-top: 0.25em;
+}
+
+.summaryRight {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  align-items: stretch;
+  justify-content: end;
+}
+
+.summaryStats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+@media (max-width: 520px) {
+  .summaryStats { grid-template-columns: 1fr; gap: 0.5rem; }
+}
+
+.statBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--rule);
+}
+.statNum {
+  font-family: var(--ifm-heading-font-family);
+  font-size: 1.7rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink);
+  letter-spacing: -0.018em;
+  font-variant-numeric: tabular-nums;
+}
+.statLabel {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+/* ────────────────────
+   Section heading used between summary and catalog
+   ──────────────────── */
+.sectionLabel {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  margin-bottom: 1.5rem;
+}
+.sectionLabel::before {
+  content: "";
+  flex: 0 0 32px;
+  height: 1px;
+  background: var(--accent);
+}
+.sectionTitle {
+  font-family: var(--ifm-heading-font-family);
+  font-size: clamp(1.4rem, 1rem + 1.2vw, 2rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  margin: 0 0 1.5rem;
+  line-height: 1.15;
+  border: none;
+  padding: 0;
+}
+.sectionTitle::before { content: none; }
+
+/* ────────────────────
+   Book list — catalog entries. Larger cards, asymmetric layout.
+   ──────────────────── */
+.bookList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 0;
+  border-top: 1px solid var(--rule);
+}
+
+.bookCard {
+  padding: 1.5rem 1.5rem 1.25rem;
+  border-right: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  position: relative;
+  transition: background var(--dur-med) var(--ease-out-quint),
+              transform var(--dur-med) var(--ease-out-quint);
+  overflow: hidden;
+}
+/* Leftmost column needs a left border too, so the whole grid reads as a sheet */
+.bookList > .bookCard:first-child,
+.bookCard:nth-child(1) {
+  border-left: 1px solid var(--rule);
+}
+/* This only works cleanly for small grids; add fallback via pseudo */
+.bookList {
+  border-left: 1px solid var(--rule);
+}
+.bookCard {
+  border-left: none;
+}
+
+.bookCard:hover {
+  background: var(--paper-raised);
+}
+.bookCard:hover .bookTitle {
+  color: var(--accent-deep);
+}
+
+.bookIndex {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px dotted var(--rule);
+}
+
+.bookHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.bookTitle {
+  font-family: var(--ifm-heading-font-family);
+  font-weight: 600;
+  font-size: 1.35rem;
+  line-height: 1.2;
+  letter-spacing: -0.018em;
+  color: var(--ink);
+  text-decoration: none;
+  word-break: break-word;
+  background-image: none;
+  transition: color var(--dur-fast);
+  font-variation-settings: "opsz" 48;
+}
+.bookTitle:hover {
+  color: var(--accent);
+}
+.bookTitle::after {
+  content: " →";
+  font-family: var(--ifm-font-family-monospace);
+  color: var(--accent);
+  opacity: 0;
+  transition: opacity var(--dur-fast), transform var(--dur-fast);
+  display: inline-block;
+}
+.bookCard:hover .bookTitle::after {
+  opacity: 1;
+  transform: translateX(3px);
+}
+
+.bookPct {
+  font-family: var(--ifm-font-family-monospace);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  font-size: 0.85rem;
+  color: var(--accent-deep);
+  white-space: nowrap;
+}
+
+/* Bar: segmented ticks instead of a smooth bar — reinforces the editorial feel */
+.progressTrack {
+  display: flex;
+  gap: 3px;
+  margin-top: auto;
+  padding-top: 0.5rem;
+}
+.tick {
+  flex: 1;
+  height: 14px;
+  background: var(--paper-sunk);
+  border: 1px solid var(--rule);
+  transition: background var(--dur-fast) var(--ease-out-quint),
+              border-color var(--dur-fast);
+}
+.tickOn {
+  background: var(--accent);
+  border-color: var(--accent-deep);
+}
+
+/* Flowing horizontal bar (fallback / summary) */
+.progressBar {
+  position: relative;
+  height: 2px;
+  background: var(--rule);
+  overflow: hidden;
+}
+.progressFill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.6s var(--ease-out-quint);
+}
+
+.bookMeta {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.76rem;
+  color: var(--ink-muted);
+  letter-spacing: 0.02em;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.bookMetaItem {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: baseline;
+}
+.bookMetaKey {
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* Empty state */
+.empty {
+  padding: 3rem;
+  text-align: center;
+  border: 1px dashed var(--rule-strong);
+  border-radius: 2px;
+  color: var(--ink-muted);
+  background: var(--paper-raised);
+}
