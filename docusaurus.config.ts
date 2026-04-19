@@ -43,7 +43,7 @@ const config: Config = {
     {
       tagName: 'script',
       attributes: {},
-      innerHTML: `(function(){try{var k='locale-switch-scroll',r=sessionStorage.getItem(k);if(!r)return;var d=JSON.parse(r);if(Date.now()-d.timestamp>5000){sessionStorage.removeItem(k);return;}sessionStorage.removeItem(k);document.documentElement.style.opacity='0';window.addEventListener('DOMContentLoaded',function(){var y=d.scrollRatio*document.body.scrollHeight;window.scrollTo(0,y);requestAnimationFrame(function(){document.documentElement.style.opacity='';});});setTimeout(function(){document.documentElement.style.opacity='';},1500);}catch(e){document.documentElement.style.opacity='';}})();`,
+      innerHTML: `(function(){var k='locale-switch-scroll';var r;try{r=sessionStorage.getItem(k);}catch(e){return;}if(!r)return;try{sessionStorage.removeItem(k);}catch(e){}var d;try{d=JSON.parse(r);}catch(e){return;}if(!d||Date.now()-d.timestamp>5000)return;var html=document.documentElement;html.style.opacity='0';var done=false;function restore(){if(done)return;done=true;try{var h=document.body?document.body.scrollHeight:0;if(h>0){window.scrollTo(0,(d.scrollRatio||0)*h);}}catch(e){}html.style.opacity='';}if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',function(){requestAnimationFrame(restore);});}else{requestAnimationFrame(restore);}setTimeout(restore,1200);})();`,
     },
   ],
 
