@@ -1,9 +1,9 @@
 ---
 title: "模仿學習與行為克隆"
 prerequisites: ["19-drl-ppo-sac-ddpg"]
-estimated_time: 45
+estimated_time: 50
 difficulty: 3
-tags: ["imitation-learning", "behavior-cloning", "dagger", "irl"]
+tags: ["imitation-learning", "behavior-cloning", "dagger", "irl", "gail", "diffusion-policy"]
 sidebar_position: 20
 ---
 
@@ -11,163 +11,231 @@ sidebar_position: 20
 
 ## 你將學到
 
-- 能精確講出 Behavior Cloning (BC)、DAgger、Inverse RL (IRL) 三種模仿學習方法的核心差異：BC 是純監督學習擬合 demo、DAgger 用在線人類糾偏解決 distribution shift、IRL 反推 reward function
-- 遇到「有專家示範數據但不想設計 reward function」時，知道先判斷數據量、是否有在線專家、任務複雜度，然後選對方法
-- 面試時能在兩分鐘內講清楚 distribution shift 是什麼、為什麼 BC 在長 horizon 任務會崩潰、DAgger 怎麼修
+- 能精確講出 Behavior Cloning (BC)、DAgger、IRL、GAIL、Diffusion Policy 五種模仿學習方法的核心機制與適用場景，面試時不含糊
+- 遇到「有專家示範但不想設計 reward」的場景，能根據數據量、是否有在線專家、動作分布是否多模態，判斷該用哪個方法
+- 理解 distribution shift 是 BC 必然崩潰的數學原因，並知道 DAgger 如何從 $O(T^2)$ 降到 $O(T)$
 
 ## 核心概念
 
-**精確定義**：**模仿學習 (Imitation Learning, IL)** 是讓 agent 從專家示範中學習策略 $\pi_\theta$，不需要自己定義 reward function。核心假設：「我不知道什麼是好的（reward），但我有人做給我看（demonstration）」。和 RL 的本質差異 — RL 通過試錯 + reward 信號學習；IL 通過模仿 + 示範數據學習。
+### 六個精確定義
 
-**三大方法**：
+1. **Behavior Cloning (BC)**：把專家示範 $(s, a)$ 當監督學習的 $(x, y)$，直接最小化 $\|\pi_\theta(s) - a\|^2$。本質是回歸問題。快速出原型但脆弱 — 依賴 i.i.d. 假設，而部署時策略自身的分布和訓練分布不同。
 
-- **Behavior Cloning (BC)**：最簡單 — 把 $(s, a)$ 示範對當作監督學習的 $(x, y)$，直接擬合 $\pi_\theta(a|s)$。就是一個回歸/分類問題。快但脆弱。
-- **DAgger (Dataset Aggregation)**：解決 BC 的 distribution shift 問題 — 用學生策略跑環境，遇到偏離時請專家標註正確動作，把新數據加入訓練集，反覆迭代。需要在線專家（interactive expert）。
-- **Inverse RL (IRL)**：不直接學策略，而是從示範反推 reward function $R^*$，然後用 RL 在學到的 reward 下訓練策略。最靈活但最慢。
+2. **Distribution Shift（分布偏移）**：BC 訓練時見的是專家走過的狀態 $s \sim d^{\pi_E}$。部署時策略犯一個小錯 → 進入專家沒走過的狀態 → 策略輸出不可靠 → 錯上加錯。累積誤差和 horizon 的**平方**成正比：$\text{error} \propto T^2 \cdot \epsilon$。
 
-**Distribution Shift — IL 的核心困難**：
+3. **DAgger (Dataset Aggregation)**：學生策略執行 → 收集學生實際到達的狀態 → 專家標註正確動作 → 新數據聚合到訓練集 → 重新訓練 → 迭代。核心：在**學生的分布**上收集**專家的標註**，直接解決 train-test distribution mismatch。
 
-BC 在訓練時只見過專家走過的狀態 $s \sim d^{\pi_E}$。部署時如果策略犯了一個小錯，到達專家沒去過的狀態 $s' \notin d^{\pi_E}$ → 策略對 $s'$ 的輸出是垃圾（訓練時沒見過）→ 錯上加錯 → 累積偏移 → 完全崩潰。
+4. **Inverse RL (IRL)**：不學策略學 reward — 從示範反推 $R^*$，再用 RL 在學到的 reward 下訓練策略。歧義性是本質問題：$R=0$ 也能讓所有行為「最優」。MaxEntropy IRL 用最大熵原則約束，選最不做額外假設的 reward。
 
-$$
-\text{BC 的累積誤差} \propto T^2 \cdot \epsilon
-$$
+5. **GAIL (Generative Adversarial Imitation Learning)**：GAN 思想 — Generator 是策略 $\pi$，Discriminator 區分「這個 $(s,a)$ 是專家還是學生的？」。跳過顯式 reward 學習，直接匹配軌跡分布。省去 IRL 的歧義問題，但 GAN 訓練不穩定且需要大量在線交互。
 
-其中 $T$ 是 horizon 長度，$\epsilon$ 是單步模仿誤差。**物理意義**：錯誤是二次方累積的 — horizon 長 2 倍，累積誤差惡化 4 倍。這就是 BC 在長 horizon 任務（如自駕、長序列操作）必然崩潰的數學原因。
+6. **Diffusion Policy**：用擴散模型（denoising diffusion）生成動作序列。從高斯噪聲開始，逐步去噪到乾淨動作。核心優勢：能表示**多模態動作分布** — 擦桌子可以順時針也可以逆時針，MSE loss 的 Gaussian 策略只能輸出平均（卡在中間不動），Diffusion 能保留多個 mode。輸出 action chunk（多步動作序列）進一步減少 compounding error。
+
+### 閉環定位
 
 **在感知 → 規劃 → 控制閉環的位置**：
 - **輸入**：狀態/觀察 $s$（和 RL 策略一樣）+ 專家示範數據集 $\mathcal{D} = \{(s_i, a_i)\}$（來自人類遙操作或運動規劃器）
 - **輸出**：策略 $\pi_\theta(a|s)$ — 和 Deep RL 策略的介面完全相同
-- **下游**：動作送給底層控制器。和 Deep RL 互補 — RL 需要 reward 但不需要示範，IL 需要示範但不需要 reward
-- **閉環節點**：和 Deep RL 一樣跨越**規劃 + 控制**，但學習信號從 reward 換成了 demonstration
+- **下游**：動作送給底層控制器（MPC / PID）。和 Deep RL 互補 — RL 需要 reward 但不需要示範，IL 需要示範但不需要 reward
+- **閉環節點**：跨越**規劃 + 控制**，學習信號從 reward 換成 demonstration。實務中常見組合：IL warm start → RL fine-tune 超越專家
 
-**最少夠用的數學**：
+### 最少夠用的數學
 
-1. **Behavior Cloning 的損失函數**（就是標準監督學習）：
+1. **BC Loss**（標準監督學習損失）：
 
 $$
 L_{BC}(\theta) = \mathbb{E}_{(s,a) \sim \mathcal{D}} \left[ \| \pi_\theta(s) - a \|^2 \right]
 $$
 
-**物理意義**：最小化策略輸出和專家動作的 MSE。連續動作空間用 L2 loss，離散用 cross-entropy。簡單直接，但只能保證在**專家數據分布**上表現好。
+**物理意義**：最小化策略輸出和專家動作的 MSE。連續動作空間用 L2，離散用 cross-entropy。只能保證在**專家數據分布上**表現好，對偏離狀態沒有任何保證。
 
-2. **DAgger 的迭代流程**：
+2. **BC 累積誤差的上界**（Ross et al., 2011）：
+
+$$
+J(\pi_E) - J(\pi_\theta) \le T^2 \epsilon + O(T)
+$$
+
+**物理意義**：$\epsilon$ 是單步模仿誤差，$T$ 是 horizon。即使 $\epsilon$ 很小，$T$ 夠長就會爆炸。這是 BC 在長 horizon 任務（自駕、長序列操作）**必然崩潰**的數學根源。
+
+3. **DAgger 的數據聚合**：
 
 $$
 \mathcal{D}_{i+1} = \mathcal{D}_i \cup \{ (s, \pi_E(s)) \mid s \sim d^{\pi_i} \}
 $$
 
-**物理意義**：第 $i$ 輪用學生策略 $\pi_i$ 跑環境收集狀態 $s$，然後問專家「在這個狀態你會做什麼？」得到 $\pi_E(s)$。把新的 $(s, \pi_E(s))$ 加入數據集重新訓練。直覺：讓學生犯錯、老師糾正、下次就會了。
+**物理意義**：第 $i$ 輪用學生策略 $\pi_i$ 跑環境收集狀態 $s$，問專家「你在這裡會怎麼做？」得到 $\pi_E(s)$。把新 $(s, \pi_E(s))$ 加入數據集重新訓練。DAgger 把誤差上界從 $O(T^2)$ 降到 $O(T)$ — 線性取代二次。
 
-3. **IRL 的目標**（MaxEntropy IRL）：
+4. **IRL 的 MaxEntropy 目標**：
 
 $$
 \max_{R} \mathbb{E}_{\pi_E}[R(s,a)] - \log Z(R) - \lambda \|R\|
 $$
 
-其中 $Z(R) = \int \exp(\sum_t R(s_t, a_t)) d\tau$ 是配分函數。
+**物理意義**：找 reward function 使專家行為在所有可能行為中概率最高。$Z(R)$ 是配分函數（所有軌跡的指數加權和），$\lambda\|R\|$ 防止 reward 過擬合。歧義性無法完全消除 — IRL 學到的 reward 需要人工 sanity check。
 
-**物理意義**：找一個 reward function $R$，使得專家的行為在所有可能行為中概率最高（MaxEnt 原則）。$\lambda \|R\|$ 是正則化防止 reward 過擬合。歧義問題：多個 $R$ 可能解釋同一組示範（reward ambiguity）。
-
-<details>
-<summary>深入：Distribution Shift 的嚴格分析與 DAgger 的收斂證明</summary>
-
-### Distribution Shift 的量化
-
-設專家策略的狀態分布為 $d^{\pi_E}$，學生策略 $\pi_\theta$ 的狀態分布為 $d^{\pi_\theta}$。BC 的訓練數據來自 $d^{\pi_E}$，但部署時策略面對的是 $d^{\pi_\theta}$。
-
-性能差距的上界（Ross et al., 2011）：
-
-$$
-J(\pi_E) - J(\pi_\theta) \le T^2 \epsilon_{train} + O(T)
-$$
-
-其中 $\epsilon_{train}$ 是在**專家分布**上的平均單步誤差。關鍵：$T^2$ 意味著即使單步誤差很小，長 horizon 下也會爆炸。
-
-### DAgger 的理論保證
-
-DAgger 在 $N$ 輪迭代後，性能差距的上界變為：
-
-$$
-J(\pi_E) - J(\pi_{best}) \le \epsilon_{train} \cdot T + O(\sqrt{T \log N / N})
-$$
-
-注意：$T^2$ 降到了 $T$（線性而非二次）。這是因為 DAgger 讓學生在自己的分布 $d^{\pi_i}$ 上收集數據，然後由專家標註，消除了 train-test distribution mismatch。
-
-### 為什麼 IRL 有歧義
-
-給定一組專家軌跡 $\{\tau_1, \tau_2, ...\}$，存在無限多個 reward function 能讓這些軌跡最優。極端例子：$R(s,a) = 0$ 對所有 $s, a$ — 所有行為都一樣好，專家行為當然也是最優的。
-
-MaxEntropy IRL 通過最大熵原則選擇「最不做額外假設」的 reward — 但本質上歧義無法完全消除。實務上 IRL 學到的 reward 需要人工 sanity check。
-
-</details>
-
-<details>
-<summary>深入：GAIL 與 Diffusion Policy — 現代模仿學習的演化</summary>
-
-### GAIL (Generative Adversarial Imitation Learning, 2016)
-
-GAIL 把 IRL + RL 合成一步 — 用 GAN 的框架直接匹配策略的軌跡分布和專家的軌跡分布：
+5. **GAIL 的 min-max 目標**：
 
 $$
 \min_\pi \max_D \mathbb{E}_{\pi_E}[\log D(s,a)] + \mathbb{E}_{\pi}[\log(1 - D(s,a))]
 $$
 
-- Discriminator $D$：區分「這個 $(s,a)$ 是專家的還是學生的？」
-- Generator（策略 $\pi$）：騙過 Discriminator — 讓自己的行為越來越像專家
+**物理意義**：Discriminator 學會區分專家和學生的 $(s,a)$；策略學會騙過 Discriminator。和 GAN 完全對偶 — Discriminator 隱式地提供了 reward signal。
 
-優點：不需要顯式學 reward → 跳過 IRL 的歧義問題。
-缺點：GAN 訓練不穩定，需要大量在線交互（因為內層需要 RL）。
-
-### Diffusion Policy (2023)
-
-用 Diffusion Model 取代簡單的 MLP/Gaussian 作為策略表示：
+6. **Diffusion Policy 的去噪過程**：
 
 $$
-\pi_\theta(a|s) = \text{DenoisingProcess}(a^T \to a^0 | s, \theta)
+a^{k-1} = \frac{1}{\sqrt{\alpha_k}}\left(a^k - \frac{1-\alpha_k}{\sqrt{1-\bar{\alpha}_k}}\epsilon_\theta(a^k, k, s)\right) + \sigma_k z
 $$
 
-優點：
-- **多模態動作**：擦桌子可以順時針也可以逆時針，Gaussian 策略只能輸出平均（卡在中間不動），Diffusion 能表示多個模式
-- **高維連續動作**：輸出整段動作序列（action chunk），而不是單步動作。減少 compounding error
-- **和 BC 結合**：Diffusion Policy 本質是一個更強的 BC — 用 diffusion model 做更好的條件分布建模
+**物理意義**：從純噪聲 $a^K$ 開始，每步用網路 $\epsilon_\theta$ 預測噪聲並去除，逐步恢復乾淨動作。conditioning on $s$ 讓去噪過程依賴當前觀測。多步去噪天然支持多模態 — 不同噪聲初始化收斂到不同 mode。
 
-缺點：推理速度慢（需要多步去噪），目前在 10-100 Hz 控制場景仍有挑戰。
+<details>
+<summary>深入：Distribution Shift 的嚴格分析與 DAgger 收斂證明</summary>
 
-### 演化路線
+### Distribution Shift 的量化
 
-```
-BC (監督學習) → DAgger (在線糾偏) → GAIL (GAN+RL) → Diffusion Policy (強分布建模)
-                                   → IRL (學 reward)
-```
+設專家策略的狀態分布為 $d^{\pi_E}$，學生策略 $\pi_\theta$ 的狀態分布為 $d^{\pi_\theta}$。BC 在 $d^{\pi_E}$ 上訓練，但部署時面對 $d^{\pi_\theta}$。
 
-當前趨勢（2024）：Diffusion Policy + action chunking 是最 hot 的 IL 方法，特別在雙臂操作任務表現亮眼。
+Ross et al. (2011) 給出的性能差距上界：
+
+$$
+J(\pi_E) - J(\pi_\theta) \le T^2 \epsilon_{train} + O(T)
+$$
+
+其中 $\epsilon_{train}$ 是在**專家分布**上的平均單步誤差。$T^2$ 項的來源：
+
+1. 第 1 步：誤差 $\epsilon$（和專家行為的偏差）
+2. 第 2 步：因為第 1 步偏了，狀態偏離 → 額外誤差 $\epsilon + \delta$
+3. 第 $t$ 步：前面所有步的偏差累積 → 誤差 $\approx t \cdot \epsilon$
+4. 總和 $\sum_{t=1}^T t \cdot \epsilon \approx T^2 \epsilon / 2$
+
+### DAgger 的收斂保證
+
+DAgger 在 $N$ 輪迭代後：
+
+$$
+J(\pi_E) - J(\pi_{best}) \le \epsilon_{train} \cdot T + O\left(\sqrt{\frac{T \log N}{N}}\right)
+$$
+
+關鍵改進：$T^2$ 降到 $T$。原因：DAgger 讓學生在**自己的分布** $d^{\pi_i}$ 上收集數據，由專家標註，直接消除 train-test distribution mismatch。
+
+### 為什麼 IRL 有歧義
+
+給定專家軌跡 $\{\tau_1, \tau_2, ...\}$，存在無限多個 reward function 讓這些軌跡最優。極端例子：$R(s,a) = 0$ → 所有行為等價 → 專家行為「最優」。
+
+MaxEntropy IRL 通過最大熵原則選「最不做假設」的 reward，但歧義無法完全消除。GAIL 繞過了這個問題 — 不顯式學 reward，而是直接匹配軌跡分布的佔據度量 (occupancy measure)。
+
+### GAIL 與 IRL 的對偶關係
+
+Ho & Ermon (2016) 證明：GAIL 的最優 Discriminator 恰好是 IRL reward 的函數。具體來說，GAIL 等價於在 occupancy measure 空間做 Jensen-Shannon divergence 最小化：
+
+$$
+\min_\pi D_{JS}(\rho_\pi \| \rho_{\pi_E})
+$$
+
+其中 $\rho_\pi(s,a) = \sum_t P(s_t=s, a_t=a \mid \pi)$ 是策略的 occupancy measure。
 
 </details>
 
+<details>
+<summary>深入：Diffusion Policy 的完整機制與 Action Chunking 工程細節</summary>
+
+### Diffusion Policy 架構
+
+Diffusion Policy (Chi et al., 2023) 把動作生成建模為條件去噪擴散過程：
+
+**Forward process（加噪）**：
+
+$$
+q(a^k \mid a^{k-1}) = \mathcal{N}(a^k; \sqrt{\alpha_k} a^{k-1}, (1-\alpha_k)I)
+$$
+
+從乾淨動作 $a^0$ 逐步加噪到純高斯噪聲 $a^K$。
+
+**Reverse process（去噪/生成）**：
+
+$$
+p_\theta(a^{k-1} \mid a^k, s) = \mathcal{N}(a^{k-1}; \mu_\theta(a^k, k, s), \sigma_k^2 I)
+$$
+
+學一個網路 $\epsilon_\theta$ 預測噪聲，conditioning on 觀測 $s$。推理時從 $a^K \sim \mathcal{N}(0, I)$ 開始去噪 $K$ 步得到動作。
+
+**訓練損失**（噪聲預測）：
+
+$$
+L = \mathbb{E}_{k, a^0, \epsilon} \left[\| \epsilon - \epsilon_\theta(\sqrt{\bar{\alpha}_k}a^0 + \sqrt{1-\bar{\alpha}_k}\epsilon, k, s) \|^2\right]
+$$
+
+### 為什麼 Diffusion Policy 能解決多模態問題
+
+考慮擦桌子任務：專家有時順時針擦、有時逆時針擦。
+
+- **MSE loss（Gaussian BC）**：最小化 $\|a_{pred} - a_{expert}\|^2$ → 預測的動作是所有專家動作的**均值** → 既不順時針也不逆時針，卡在中間不動 → 最差行為
+- **Diffusion Policy**：不同的噪聲初始化 $a^K$ 在去噪過程中收斂到不同的 mode → 有時輸出順時針、有時逆時針 → 每次都是有效動作
+
+### Action Chunking 工程細節
+
+不輸出單步動作 $a_t$，而是輸出未來 $H$ 步的動作序列 $[a_t, a_{t+1}, ..., a_{t+H-1}]$：
+
+1. **降低有效 horizon**：原來 $T=200$ 步變成 $T/H = 200/16 \approx 13$ 個 chunk → compounding error 從 $T^2$ 降到 $(T/H)^2$
+2. **Temporal ensemble**：相鄰 chunk 有重疊，取指數加權平均 → 動作更平滑
+3. **推理頻率**：不需要每步推理，每 $H$ 步推理一次 → 允許更大的模型（推理延遲被 amortize）
+
+**ACT (Action Chunking with Transformers)**：用 CVAE + Transformer 做 action chunking，在雙臂操作任務表現突出。Diffusion Policy + action chunking 是 2023-2024 年 IL 最 hot 的組合。
+
+### 推理速度問題與解法
+
+標準 DDPM 需要 $K=100-1000$ 步去噪 → 推理延遲太高（>100ms）。解法：
+
+- **DDIM**：確定性去噪，$K$ 可降到 10-20 步
+- **Consistency Distillation**：蒸餾成 1-4 步生成
+- **Flow Matching**：用 ODE 取代 SDE，更高效的軌跡
+
+目前 Diffusion Policy 在 10 Hz 控制場景可行，100 Hz 仍有挑戰。
+
+</details>
+
+### 常用 API / 框架
+
+| 框架 | 支援方法 | 典型用途 |
+|------|---------|---------|
+| robomimic (NVIDIA) | BC, BC-RNN, HBC | 標準化 IL benchmark + 評估 |
+| LeRobot (Hugging Face) | ACT, Diffusion Policy | 開源訓練 + 低成本硬體部署 |
+| imitation (Stable Baselines) | BC, DAgger, GAIL | 快速原型 + 教學 |
+| d3rlpy | BC, IQL（離線 RL/IL） | 離線學習一站式工具 |
+
 ## 直覺理解
 
-**類比：師傅帶徒弟**。BC 是師傅做一遍給徒弟看影片，徒弟照著影片練 — 步驟正確時很好，但一旦手滑偏了，影片裡沒教過「偏了怎麼修」，於是越偏越遠。DAgger 是師傅站在旁邊看徒弟做 — 每次徒弟偏了師傅立刻說「這時候應該這樣」，把糾正也記下來，下次就知道偏了怎麼救。IRL 是最高境界：不是學師傅的動作，而是理解師傅「為什麼這樣做」（reward function），然後自己摸索出可能比師傅更好的做法。
+**類比：師傅帶徒弟**
 
-**Distribution Shift 的視覺比喻**：像一輛自駕車只在高速公路直線段訓練過。上路後稍微偏了一點 → 進入從沒訓練過的「偏離車道」狀態 → 不知道怎麼修正 → 偏更多 → 完全失控。這就是 compounding error 的本質。DAgger 的解法：讓車在路上開，但方向盤後面坐一個老司機，每次快偏時老司機說「打左」或「打右」，把這些修正動作記錄下來重新訓練。
+- **BC**：師傅做一遍拍影片，徒弟照影片練。步驟對的時候很好，但手一滑偏了，影片沒教過「偏了怎麼修」→ 越偏越遠。食譜式學習，偏離食譜就崩。
+- **DAgger**：師傅站旁邊看徒弟做，每次偏了師傅立刻說「這時候應該這樣」，把糾正記下來。下次就知道偏了怎麼救。駕訓班模式。
+- **IRL**：不學師傅的動作，而是理解師傅「為什麼這樣做」（reward function）。最高境界但最慢 — 且師傅的意圖可能有多種解讀（歧義）。
+- **GAIL**：找一個裁判（Discriminator）看著學生和師傅做，不斷告訴學生「你這個動作不像師傅」。不需要理解師傅為什麼這樣做，只要模仿到分不出來就行。
+- **Diffusion Policy**：師傅示範了多種做法（有時左擦有時右擦），學生能記住所有做法並隨機選一種執行 — 而不是把所有做法平均成「不動」。
 
-**模擬器觀察**：在 MuJoCo 的 `Hopper-v4` 環境：
-- 收集 100 條專家軌跡 → BC 訓練：初始幾步和專家一樣，但大約 50 步後開始偏離，100 步後摔倒
-- 同樣的數據量但加 DAgger 迭代 5 輪：200+ 步仍然穩定
-- 只用 10 條專家軌跡做 BC：幾乎立刻崩潰 — 數據少 + distribution shift 雙重打擊
-- 對比：加數據增強（狀態加噪聲）的 BC，可以撐到 100+ 步 — 噪聲部分模擬了偏離狀態
+**Distribution Shift 的視覺比喻**：自駕車只在高速公路直線段訓練過。上路後稍微偏了一點 → 進入沒訓練過的「偏離車道」狀態 → 不知道怎麼修正 → 偏更多 → 完全失控。這就是 compounding error。DAgger 的解法：方向盤後面坐一個老司機，每次快偏時老司機說「打左」或「打右」，把修正動作記錄下來重新訓練。
+
+**模擬器觀察**：在 MuJoCo 的 `Hopper-v4`：
+- 100 條專家軌跡 → BC：初始 50 步 OK，100 步後摔倒
+- 同數據量 + DAgger 5 輪：200+ 步穩定
+- 只用 10 條做 BC：幾乎立刻崩（數據少 + distribution shift 雙重打擊）
+- BC + 狀態噪聲增強：撐到 100+ 步（噪聲部分模擬偏離狀態）
+- Diffusion Policy：多模態任務（T 型迷宮）中不會卡在 mode 之間，BC 會
 
 ## 實作連結
 
-**三個典型工程場景**：
+**四個典型工程場景**：
 
-1. **遙操作數據 → BC 快速原型（機械臂抓取）**：人類用 SpaceMouse 遙控機械臂做 50 次抓取示範，收集 $(s, a)$ 對，訓練一個 MLP 策略。5 分鐘訓練完就能部署 — 但只對訓練時見過的物體位置有效。
+1. **遙操作數據 → BC 快速原型（機械臂抓取）**：SpaceMouse 遙控機械臂做 50 次抓取示範 → 收集 $(s, a)$ → MLP 訓練 5 分鐘 → 部署。只對訓練時見過的物體位置有效，但作為 baseline 極快。
 
-2. **DAgger 在自駕場景**：先用 BC 訓練一個基礎駕駛策略，然後讓車上路（安全員坐旁邊）。每次策略即將偏離車道，安全員介入 → 記錄 $(s_{偏離}, a_{修正})$ → 加入數據集重新訓練。3-5 輪後策略的魯棒性顯著提升。
+2. **DAgger 在自駕場景**：BC 訓練基礎駕駛策略 → 上路（安全員坐旁邊）→ 每次即將偏離車道，安全員介入 → 記錄 $(s_{偏離}, a_{修正})$ → 聚合重新訓練。3-5 輪後魯棒性顯著提升。
 
-3. **IRL 學習人類偏好（導航）**：觀察人類在辦公室走動的軌跡，用 IRL 反推「人類覺得什麼路線好」的 reward — 可能包含「離牆遠一點」、「避開擁擠走廊」等隱含偏好。然後機器人用這個 reward 做路徑規劃。
+3. **Diffusion Policy 做雙臂操作**：收集 200+ 條雙臂折疊衣服的 demo → Diffusion Policy + action chunking → 能處理「左手先折」和「右手先折」兩種 mode，不會卡死。ACT/Diffusion Policy 是 2024 年雙臂操作的首選。
 
-**Code 骨架**（Python，BC 和 DAgger）：
+4. **IL warm start + RL fine-tune**：先用 BC 從 50 條 demo 學一個能完成 60% 任務的初始策略 → 再用 PPO/SAC 在真實 reward 下 fine-tune → 最終超越專家。IL 提供良好初始化，RL 突破專家天花板。
+
+**Code 骨架**（Python，BC + DAgger）：
 
 ```python
 import torch
@@ -176,31 +244,31 @@ import numpy as np
 
 class BCPolicy(nn.Module):
     """Behavior Cloning: 監督學習擬合專家動作"""
-    def __init__(self, obs_dim, act_dim):
+    def __init__(self, obs_dim: int, act_dim: int):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(obs_dim, 256), nn.ReLU(),
             nn.Linear(256, 256), nn.ReLU(),
-            nn.Linear(256, act_dim),  # 連續動作: 直接輸出
+            nn.Linear(256, act_dim),
         )
 
-    def forward(self, obs):
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
         return self.net(obs)
 
-# BC 訓練
+# --- BC 訓練 ---
 # loss = F.mse_loss(policy(obs_batch), action_batch)
 # optimizer.step()
 
-# DAgger 迭代
+# --- DAgger 迭代 ---
 # for i in range(num_dagger_rounds):
-#     rollout_states = collect_rollout(policy)    # 學生跑環境
-#     expert_actions = query_expert(rollout_states) # 問專家
-#     dataset.add(rollout_states, expert_actions)   # 聚合數據
-#     policy = train_bc(dataset)                    # 重新訓練
+#     states = collect_rollout(policy)        # 學生跑環境
+#     expert_acts = query_expert(states)       # 問專家
+#     dataset.add(states, expert_acts)          # 聚合
+#     policy = train_bc(dataset)                # 重新訓練
 ```
 
 <details>
-<summary>深入：完整 DAgger 訓練流程（Python）</summary>
+<summary>深入：完整 DAgger 訓練流程（Python，可直接運行）</summary>
 
 ```python
 """
@@ -212,10 +280,9 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import gymnasium as gym
-from collections import deque
 
 class MLPPolicy(nn.Module):
-    def __init__(self, obs_dim, act_dim):
+    def __init__(self, obs_dim: int, act_dim: int):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(obs_dim, 256), nn.ReLU(),
@@ -226,20 +293,19 @@ class MLPPolicy(nn.Module):
     def forward(self, obs):
         return self.net(obs)
 
-    def get_action(self, obs):
+    def get_action(self, obs: np.ndarray) -> np.ndarray:
         with torch.no_grad():
-            obs_t = torch.FloatTensor(obs).unsqueeze(0)
-            return self.net(obs_t).squeeze(0).numpy()
+            return self.net(torch.FloatTensor(obs).unsqueeze(0)).squeeze(0).numpy()
 
 class DAggerTrainer:
-    def __init__(self, env_name, expert_policy, obs_dim, act_dim):
+    def __init__(self, env_name: str, expert_policy, obs_dim: int, act_dim: int):
         self.env = gym.make(env_name)
-        self.expert = expert_policy  # 專家策略（或人類介面）
+        self.expert = expert_policy
         self.policy = MLPPolicy(obs_dim, act_dim)
         self.optimizer = optim.Adam(self.policy.parameters(), lr=1e-3)
         self.dataset = {"obs": [], "act": []}
 
-    def collect_expert_demos(self, num_episodes=50):
+    def collect_expert_demos(self, num_episodes: int = 50):
         """Phase 0: 收集初始專家示範"""
         for _ in range(num_episodes):
             obs, _ = self.env.reset()
@@ -251,178 +317,150 @@ class DAggerTrainer:
                 obs, _, terminated, truncated, _ = self.env.step(action)
                 done = terminated or truncated
 
-    def dagger_iteration(self, num_rollouts=20, horizon=500):
-        """Phase 1+: 用學生策略收集狀態，問專家標註"""
-        new_obs, new_act = [], []
+    def dagger_iteration(self, num_rollouts: int = 20, horizon: int = 500):
+        """DAgger 核心：用學生跑、問專家標、聚合數據"""
         for _ in range(num_rollouts):
             obs, _ = self.env.reset()
             for _ in range(horizon):
-                # 學生策略決定動作（但我們收集的是狀態）
                 student_action = self.policy.get_action(obs)
-
-                # 關鍵：問專家「在這個狀態你會做什麼？」
-                expert_action = self.expert.get_action(obs)
-
-                new_obs.append(obs)
-                new_act.append(expert_action)  # 記錄的是專家動作
-
-                # 用學生動作推進環境（不是專家動作！）
-                obs, _, terminated, truncated, _ = self.env.step(student_action)
+                expert_action = self.expert.get_action(obs)  # 問專家
+                self.dataset["obs"].append(obs)
+                self.dataset["act"].append(expert_action)     # 記專家動作
+                obs, _, terminated, truncated, _ = self.env.step(student_action)  # 用學生動作推進
                 if terminated or truncated:
                     break
 
-        # 聚合到數據集
-        self.dataset["obs"].extend(new_obs)
-        self.dataset["act"].extend(new_act)
-
-    def train_policy(self, epochs=50, batch_size=256):
-        """監督學習訓練策略"""
+    def train_policy(self, epochs: int = 50, batch_size: int = 256) -> float:
         obs_arr = torch.FloatTensor(np.array(self.dataset["obs"]))
         act_arr = torch.FloatTensor(np.array(self.dataset["act"]))
-        dataset_size = len(obs_arr)
-
-        for epoch in range(epochs):
-            indices = np.random.permutation(dataset_size)
-            total_loss = 0
-            for i in range(0, dataset_size, batch_size):
-                batch_idx = indices[i:i+batch_size]
-                obs_batch = obs_arr[batch_idx]
-                act_batch = act_arr[batch_idx]
-
-                pred = self.policy(obs_batch)
-                loss = nn.functional.mse_loss(pred, act_batch)
-
+        n = len(obs_arr)
+        total_loss = 0.0
+        for _ in range(epochs):
+            for i in range(0, n, batch_size):
+                batch_idx = np.random.randint(0, n, batch_size)
+                pred = self.policy(obs_arr[batch_idx])
+                loss = nn.functional.mse_loss(pred, act_arr[batch_idx])
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
                 total_loss += loss.item()
+        return total_loss / max(1, (n // batch_size) * epochs)
 
-        return total_loss / (dataset_size // batch_size)
-
-    def run_dagger(self, num_rounds=5):
-        """完整 DAgger 流程"""
-        # Phase 0: 初始專家示範
-        print("Phase 0: Collecting expert demonstrations...")
-        self.collect_expert_demos(num_episodes=50)
+    def run(self, num_rounds: int = 5):
+        self.collect_expert_demos(50)
         loss = self.train_policy()
-        print(f"  Initial BC loss: {loss:.4f}")
-
-        # Phase 1-N: DAgger 迭代
-        for round_i in range(1, num_rounds + 1):
-            print(f"DAgger Round {round_i}/{num_rounds}")
-
-            # 用學生策略收集 + 專家標註
-            self.dagger_iteration(num_rollouts=20)
-
-            # 在聚合數據上重新訓練
+        print(f"BC baseline loss: {loss:.4f}")
+        for r in range(1, num_rounds + 1):
+            self.dagger_iteration(20)
             loss = self.train_policy()
-            print(f"  Loss: {loss:.4f}, Dataset size: {len(self.dataset['obs'])}")
-
-            # 評估
-            rewards = self.evaluate(num_episodes=10)
-            print(f"  Avg reward: {np.mean(rewards):.1f}")
-
-    def evaluate(self, num_episodes=10):
-        rewards = []
-        for _ in range(num_episodes):
-            obs, _ = self.env.reset()
-            total_reward = 0
-            done = False
-            while not done:
-                action = self.policy.get_action(obs)
-                obs, r, terminated, truncated, _ = self.env.step(action)
-                total_reward += r
-                done = terminated or truncated
-            rewards.append(total_reward)
-        return rewards
+            print(f"DAgger round {r}: loss={loss:.4f}, data={len(self.dataset['obs'])}")
 ```
 
 **關鍵實作細節**：
-
-- `dagger_iteration` 中用**學生動作**推進環境，但記錄的是**專家動作** — 這是 DAgger 的核心：在學生的分布上收集專家標註
+- `dagger_iteration` 中用**學生動作**推進環境，但記錄**專家動作** — 這是 DAgger 的核心
 - 數據集不斷增長（aggregate），不是替換 — 保留早期數據防止遺忘
-- 實務中「問專家」可能是：人類遙操作介面、一個更昂貴的運動規劃器、或預訓練好的 RL 策略
-- 數據增強可以進一步提升效果：給 obs 加高斯噪聲模擬偏離狀態
+- 「問專家」可以是：人類遙操作、運動規劃器、預訓練 RL 策略
+- 可加數據增強：obs 加高斯噪聲模擬偏離狀態，進一步提升魯棒性
 
 </details>
 
 ## 常見誤解
 
-1. **「BC 只要數據夠多就不會有 distribution shift」** — 數學上 BC 的累積誤差是 $O(T^2 \epsilon)$，即使 $\epsilon$ 很小（大量數據讓擬合很好），$T$ 夠長仍然會崩。而且現實中不可能覆蓋所有可能的偏離狀態 — 那是指數級的。**正確理解**：數據多可以降低 $\epsilon$，但無法消除 $T^2$ 的放大效應。解法是 DAgger（改分布）或 action chunking（縮短有效 horizon）。
+1. **「BC 只要數據夠多就能泛化」** — 數學上 BC 累積誤差 $\propto T^2 \epsilon$。即使 $\epsilon$ 小（大量數據讓擬合好），$T$ 夠長仍崩。更關鍵的是，不可能覆蓋所有偏離狀態 — 那是指數級的。**正確理解**：數據多降低 $\epsilon$，但無法消除 $T^2$ 放大效應。要靠 DAgger（改分布）或 action chunking（縮短有效 horizon）。
 
-2. **「IRL 能學到唯一正確的 reward function」** — IRL 本質上有歧義。最極端：$R=0$ 讓所有行為等價，專家行為當然「最優」。即使用 MaxEntropy IRL 也只是選了一個「最不做假設」的 reward，不代表唯一正確。**正確理解**：IRL 學到的 reward 需要人工 sanity check，而且不同的正則化/先驗會給出不同的 reward。
+2. **「IRL 能學到唯一正確的 reward function」** — IRL 本質有歧義。$R=0$ 讓所有行為等價，專家行為當然「最優」。即使 MaxEntropy IRL 也只是選了最不做假設的 reward。不同先驗/正則化給出不同 reward。**正確理解**：IRL 學到的 reward 需要人工 sanity check，是「合理的」而非「唯一的」。
 
-3. **「模仿學習需要完美的專家示範」** — BC/DAgger 對示範的一致性比完美性更重要。如果 10 條示範中 5 條走左邊、5 條走右邊，策略會學到「走中間」（取平均）— 這可能是最差的選擇。反而統一走一邊（即使不是最優）效果更好。**正確理解**：示範的**一致性**比**最優性**重要。如果專家行為有多種模式，需要用 mixture model 或 Diffusion Policy 來表示多模態分布。
+3. **「示範越多越好，品質不重要」** — 如果 10 條示範中 5 條走左、5 條走右，MSE loss 會學到「走中間」— 通常是最差行為（mode averaging）。反而統一走一邊效果更好。**正確理解**：示範的**一致性**比**數量**重要。多模態行為需用 GMM 或 Diffusion Policy 表示，不能用 MSE 平均化。
+
+4. **「離線模仿學習就夠了，不需要在線交互」** — 純離線 BC 在簡單短 horizon 任務 OK。但稍微複雜一點就需要某種形式的在線數據收集（DAgger、GAIL 都需要）。即使 Diffusion Policy 也受益於迭代式在線數據收集。**正確理解**：離線是起點，不是終點。在線交互是提升魯棒性的關鍵路徑。
+
+5. **「Diffusion Policy 太慢，不能用在實時控制」** — 標準 DDPM 確實慢（100+ 步去噪）。但 DDIM 可以 10-20 步，consistency distillation 可以 1-4 步。配合 action chunking（每 $H$ 步推理一次），有效推理頻率可達 10+ Hz。**正確理解**：Diffusion Policy 在 10 Hz 控制場景已可行，搭配 action chunking 和加速去噪技術，速度不再是瓶頸。100 Hz 力控場景仍需分層架構。
 
 ## 練習題
 
 <details>
-<summary>Q1：你有 100 條人類遙操作的機械臂抓取示範。BC 訓練後在已見過的物體位置成功率 90%，但物體稍微移動 5 cm 就掉到 30%。怎麼分析和改善？</summary>
+<summary>Q1：你有 100 條遙操作的機械臂抓取示範。BC 訓練後成功率 90%，但物體偏移 5 cm 就掉到 30%。怎麼分析和改善？</summary>
 
-**分析推理**：
+**完整推理鏈**：
 
 1. **根因：distribution shift**。訓練數據只覆蓋專家操作時的物體位置分布。物體偏移 5 cm → 進入策略沒見過的狀態 → 輸出不可靠
-2. **方案一：數據增強**：在訓練時給 obs 中的物體位置加隨機偏移（±10 cm），同時對 action 做對應調整。讓策略在訓練時就見過偏離的狀態
-3. **方案二：DAgger**：讓 BC 策略自己抓（物體隨機放），每次失敗時人類介入標註正確動作，加入數據集重新訓練。5 輪後覆蓋到更多偏離狀態
-4. **方案三：Action chunking**：不輸出單步動作，而是輸出未來 10 步的動作序列（action chunk）。這降低了有效 horizon（從 100 步降到 10 個 chunk），減少 compounding error
-5. **避開陷阱**：不要只堆更多示範 — 100 條示範可能都在同一個窄分布裡。需要的是**分布覆蓋**（diverse 的物體位置），不是同一位置的重複示範
+2. **方案一：數據增強**：給 obs 中的物體位置加隨機偏移（±10 cm）+ 對應 action 調整。讓策略在訓練時就見過偏離的狀態。成本最低但效果有上限
+3. **方案二：DAgger**：讓 BC 策略自己抓（物體隨機放），每次失敗時人類介入標註正確動作，加入數據集重新訓練。5 輪後覆蓋更多偏離狀態
+4. **方案三：Action chunking**：輸出未來 10 步動作序列（action chunk），降低有效 horizon（100 步 → 10 個 chunk），減少 compounding error
+5. **避開陷阱**：不要只堆更多示範 — 100 條示範可能都在同一個窄分布。需要的是**分布覆蓋**（diverse 的物體位置），不是同一位置的重複
 
-**結論**：短期用數據增強 + action chunking；有在線專家資源就上 DAgger。核心是擴大訓練分布的覆蓋範圍。
-
-</details>
-
-<details>
-<summary>Q2：你的任務需要機器人做一個長序列操作（打開櫃門 → 拿出碗 → 放到桌上 → 關門），BC 在第二步就開始崩潰。怎麼辦？</summary>
-
-**分析推理**：
-
-1. **根因**：長 horizon + compounding error。4 個子任務串聯，每個子任務 50 步 → 有效 $T = 200$。BC 的 $O(T^2)$ 累積誤差在 $T=200$ 時已經失控
-2. **方案一：分層模仿**（Hierarchical IL）：把任務拆成 4 個子策略分別做 BC，用一個高層策略（state machine 或學習的 meta-policy）決定什麼時候切換。每個子策略的有效 horizon 降到 ~50 步
-3. **方案二：DAgger + 分段**：先用 BC 訓練全流程，然後在真機上 DAgger — 但只在子任務**銜接點**（transition）重點收集專家糾偏。因為銜接點是 distribution shift 最嚴重的地方
-4. **方案三：Action chunking + Diffusion Policy**：用 Diffusion Policy 輸出長 action chunk（如 16 步），配合 temporal ensemble 做重疊預測。ACT (Action Chunking with Transformers) 論文證明這在雙臂操作很有效
-5. **方案四：Goal-conditioned BC**：每個子任務有明確的目標狀態（如「門打開到 90°」），策略以 $(s, g)$ 為輸入。達到 goal 就切換到下一個子任務
-6. **避開陷阱**：不要試圖用一個端到端 BC 策略學完整個 200 步序列 — 即使有 1000 條示範，compounding error 的 $T^2$ 效應在 $T=200$ 時是不可控的
-
-**結論**：分層模仿（降低有效 horizon）+ action chunking（減少 compounding error）。長序列操作幾乎不可能用純 BC 端到端解決。
+**結論**：短期用數據增強 + action chunking；有在線專家資源就上 DAgger。核心是擴大訓練分布的覆蓋。
 
 </details>
 
 <details>
-<summary>Q3：團隊想用 IRL 而非 BC 來學習機器人擦桌子。你覺得值不值？怎麼評估？</summary>
+<summary>Q2：長序列操作（開門 → 拿碗 → 放桌 → 關門），BC 在第二步就崩潰。怎麼辦？</summary>
 
-**分析推理**：
+**完整推理鏈**：
 
-1. **IRL 的優勢**：學到 reward function 而非策略 → (a) 可以在新環境用 RL 重新訓練而不需要新示範；(b) 更 generalizable — reward 描述「什麼是好的」而非「怎麼做」；(c) 能學到隱含偏好（如「擦角落比中間重要」）
-2. **IRL 的代價**：(a) 內層需要跑 RL → 訓練時間 10-100x BC；(b) reward ambiguity — 多個 reward 都能解釋同一組示範，需要人工驗證；(c) IRL 的超參數更多、debug 更難
-3. **評估標準**：
-   - 擦桌子的桌面形狀會不會變？如果每次都是同一張桌子 → BC 就夠
-   - 需不需要遷移到新桌子/新物體？→ IRL 學到的 reward 更 transferable
-   - 有沒有足夠算力做內層 RL？→ IRL 訓練需要在模擬器裡跑大量 RL
-4. **替代方案**：GAIL — 省去顯式 reward 學習，直接匹配軌跡分布。比 IRL 更穩定但仍需要在線交互。或者用 Diffusion Policy — 比 BC 更強的分布建模，避免 mode averaging
-5. **結論**：除非有明確的「遷移到新環境」需求且算力充足，否則 BC（或 Diffusion Policy）+ 數據增強 + DAgger 的 ROI 更高。IRL 更適合學術研究場景
+1. **根因**：長 horizon + compounding error。4 個子任務串聯，每個 50 步 → $T = 200$。BC 的 $O(T^2)$ 在 $T=200$ 時失控
+2. **方案一：分層模仿（Hierarchical IL）**：拆成 4 個子策略分別 BC，用高層 meta-policy（state machine 或學習的切換器）決定何時切換。每個子策略有效 horizon ~50 步，compounding error 大幅降低
+3. **方案二：DAgger + 重點銜接**：全流程 BC → 真機 DAgger，但重點在子任務**銜接點**收集專家糾偏（銜接點 distribution shift 最嚴重）
+4. **方案三：Diffusion Policy + Action Chunking**：輸出 16 步 action chunk + temporal ensemble 重疊預測。ACT 論文證明在雙臂操作有效
+5. **方案四：Goal-conditioned BC**：每個子任務有明確 goal（門開 90°），以 $(s, g)$ 為輸入。達到 goal 切換下一個子任務
+6. **避開陷阱**：不要用一個端到端 BC 學 200 步序列 — $T^2$ 效應在 $T=200$ 時不可控
 
-**面試官想聽到**：不被「更高級」的方法迷惑，能根據實際需求和成本做工程判斷。
+**結論**：分層模仿（降有效 horizon）+ action chunking（減 compounding error）。長序列純 BC 端到端幾乎不可能。
+
+</details>
+
+<details>
+<summary>Q3：少量 demo（只有 10 條），但需要讓機器人學會一個中等複雜度的操作。怎麼最大化利用？</summary>
+
+**完整推理鏈**：
+
+1. **10 條 demo 的困境**：數據太少 → 擬合不好（$\epsilon$ 大）+ 分布覆蓋窄（distribution shift 嚴重）
+2. **數據增強優先**：對 obs 加隨機裁剪/色彩抖動/高斯噪聲，對 action 加小幅隨機擾動 → 等效擴充 10x-50x。但增強的數據不能偏離太遠
+3. **Sim-to-Real 擴充**：在 sim 裡做 domain randomization + 大量自動 demo → 預訓練 → 用 10 條真機 demo fine-tune。Sim 數據解決量的問題，真機 demo 做 domain adaptation
+4. **Diffusion Policy / CVAE**：比 MSE loss BC 更能從少量數據學到有效分布。Diffusion Policy 的正則化效果（去噪過程本身是一種 regularization）在小數據量時特別有優勢
+5. **Few-shot IL**：如果有預訓練的 VLA（如 Octo），用 10 條 demo 做 fine-tune 就可能夠用 — 預訓練已經學到了通用的操作知識
+6. **避開陷阱**：不要用 GAIL 或 IRL — 10 條 demo + 內層 RL 的樣本效率太低，不現實
+
+**結論**：數據增強 + sim 預訓練 + Diffusion Policy。如果有預訓練 VLA，10 條 demo fine-tune 是最高效路線。
+
+</details>
+
+<details>
+<summary>Q4：任務有多模態動作（擦桌子順時針或逆時針都對），BC 訓練後機器人卡在中間不動。怎麼解決？</summary>
+
+**完整推理鏈**：
+
+1. **根因：mode averaging**。MSE loss 最小化 $\|a_{pred} - a_{expert}\|^2$ → 順時針 $(+1)$ 和逆時針 $(-1)$ 的平均是 $0$（不動）→ 最差行為
+2. **確認是 mode averaging**：visualize 策略輸出的動作分布 — 如果集中在兩個 mode 的中間（而非任何一個 mode），就是 mode averaging
+3. **方案一：Diffusion Policy**：天然支持多模態 — 不同噪聲初始化收斂到不同 mode。推理時隨機選一個 mode 執行，不會卡中間
+4. **方案二：GMM (Gaussian Mixture Model) head**：策略輸出 $K$ 個 Gaussian 的參數 $(\mu_k, \sigma_k, \pi_k)$，loss 是 negative log-likelihood。訓練時能保留多個 mode
+5. **方案三：CVAE (Conditional VAE)**：用 latent variable $z$ 編碼 mode 選擇，不同 $z$ 解碼到不同動作 mode
+6. **方案四：過濾數據**：如果多模態不是必要的（例如順逆時針效果一樣好），在數據收集時統一一種模式。犧牲靈活性換穩定性
+7. **避開陷阱**：不要試圖用更多數據解決 — 更多「一半左一半右」的數據只會讓平均更穩定地收斂到中間
+
+**結論**：Diffusion Policy 是多模態場景的首選。GMM head 和 CVAE 也可以，但 Diffusion 在高維連續動作空間的表現最好。
 
 </details>
 
 ## 面試角度
 
-1. **Distribution Shift 是模仿學習的核心困難** — 這是必考概念。帶出：「BC 的累積誤差和 horizon 的平方成正比 — 單步只偏一點點，100 步後就完全跑偏了。這就是 distribution shift：策略犯錯 → 到了訓練時沒見過的狀態 → 不知道怎麼修 → 越偏越遠。DAgger 的解法是讓學生在自己的分布上收集數據、由專家標註正確動作。」
+1. **Distribution Shift 是 BC 的致命傷** — 必考概念。帶出：「BC 的累積誤差和 horizon 平方成正比。單步偏一點點，100 步後完全跑偏。因為策略犯錯 → 到了沒訓練過的狀態 → 不知道怎麼修 → 越偏越遠。DAgger 的核心是在**學生的分布**上收集**專家的標註**，把 $O(T^2)$ 降到 $O(T)$。」
 
-2. **BC vs DAgger vs IRL 的選擇邏輯** — 展現方法論判斷力。帶出：「數據多 + 短 horizon + 無在線專家 → BC 就夠。長 horizon + 有在線專家 → DAgger。需要遷移到新環境 + 算力充足 → IRL。實務中 80% 的場景 BC + 數據增強就能解決，DAgger 是 BC 撞瓶頸時的升級路線。」
+2. **DAgger 的核心機制** — 區分「知道 DAgger」和「理解為什麼有效」。帶出：「DAgger 不是簡單的加數據重訓。關鍵是學生用自己的策略跑環境（暴露錯誤），然後由專家在**學生到達的狀態**標註正確動作。這消除了 train-test distribution mismatch — 訓練數據的分布和部署時的分布一致了。」
 
-3. **Action Chunking 是對抗 Compounding Error 的工程利器** — 展現前沿實作意識。帶出：「不輸出單步動作而是輸出未來一段動作序列，等效於把有效 horizon 縮短。ACT 和 Diffusion Policy 都用了這個技巧，在雙臂操作任務上效果顯著。這是 2023-2024 年 IL 領域最重要的工程突破之一。」
+3. **IRL 歧義性與 GAIL 的對偶關係** — 展現理論深度。帶出：「IRL 本質有歧義 — 無限多個 reward 能解釋同一組示範。GAIL 繞過了這問題：不顯式學 reward，用 GAN 直接匹配軌跡分布。Ho & Ermon 證明 GAIL 等價於在 occupancy measure 空間做 JS divergence 最小化。」
 
-4. **模仿學習和 RL 是互補的** — 展現全局視野。帶出：「RL 需要 reward 但不需要示範，IL 需要示範但不需要 reward。實務中常常組合：先用 BC/DAgger 得到一個不錯的初始策略（warm start），再用 RL fine-tune 超越專家。或者用 IRL 從示範學 reward，再用 PPO/SAC 在學到的 reward 下訓練。」
+4. **Diffusion Policy 解決多模態** — 展現前沿實作意識。帶出：「MSE loss 的 BC 對多模態動作會 mode averaging — 擦桌子順時針逆時針平均成不動。Diffusion Policy 用去噪過程生成動作，不同噪聲初始化收斂到不同 mode。加上 action chunking 輸出多步動作序列，是 2023-2024 年 IL 最重要的突破。」
 
-5. **示範的一致性比完美性重要** — 區分「知道 IL」和「踩過坑」。帶出：「如果專家的示範有多種模式（一半走左一半走右），標準 BC 會學到走中間 — 這是 mode averaging，通常是最差的行為。解法是用能表示多模態分布的策略（GMM、Diffusion Policy），或者在收集數據時就保持一致性。」
+5. **IL + RL 混合是實務首選** — 展現全局視野。帶出：「IL 和 RL 是互補的：IL 需要示範不需要 reward，RL 需要 reward 不需要示範。實務中先用 BC/DAgger warm start 一個不錯的初始策略，再用 PPO/SAC fine-tune 超越專家。或者用 IRL 從 demo 學 reward，再用 RL 在學到的 reward 下訓練。這比純 RL 從零開始快一個數量級。」
 
 ## 延伸閱讀
 
-- **Ross et al.,《A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning》(2011)** — DAgger 原論文，distribution shift 的嚴格分析和解法，寫得很清晰
-- **Ho & Ermon,《Generative Adversarial Imitation Learning》(2016)** — GAIL 論文，用 GAN 框架統一 IRL + RL，是現代 IL 的重要里程碑
-- **Zhao et al.,《Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware》(2023)** — ACT (Action Chunking with Transformers) 論文，action chunking + Transformer 在雙臂操作的突破性結果
+- **Ross et al.,《A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning》(2011)** — DAgger 原論文，distribution shift 的嚴格分析，IL 領域的基石
+- **Ho & Ermon,《Generative Adversarial Imitation Learning》(2016)** — GAIL 論文，用 GAN 統一 IRL + RL，證明了和 occupancy measure matching 的對偶關係
 - **Chi et al.,《Diffusion Policy: Visuomotor Policy Learning via Action Diffusion》(2023)** — Diffusion Policy 論文，用擴散模型做策略表示，解決多模態動作問題
-- **Ziebart et al.,《Maximum Entropy Inverse Reinforcement Learning》(2008)** — MaxEnt IRL 原論文，IRL 歧義問題的優雅解法
-- **robomimic 框架** — NVIDIA 的模仿學習 benchmark + 實作框架，支持 BC、BC-RNN、HBC 等方法，有完整的 evaluation pipeline
-- **LeRobot (Hugging Face)** — 開源機器人學習平台，支持 ACT、Diffusion Policy 的訓練和部署，配合低成本硬體
+- **Zhao et al.,《Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware》(2023)** — ACT 論文，action chunking + Transformer，雙臂操作突破性結果
+- **Ziebart et al.,《Maximum Entropy Inverse Reinforcement Learning》(2008)** — MaxEnt IRL 原論文，IRL 歧義問題的經典解法
+- **robomimic 框架（NVIDIA）** — IL benchmark + 實作框架，支持 BC/BC-RNN/HBC，有完整 evaluation pipeline
+- **LeRobot (Hugging Face)** — 開源機器人學習平台，支持 ACT、Diffusion Policy 訓練和部署，配合低成本硬體
+- **Mandlekar et al.,《What Matters in Learning from Offline Human Demonstrations for Robot Manipulation》(2022)** — 系統性比較 BC 變體的 ablation study，工程選型的重要參考
