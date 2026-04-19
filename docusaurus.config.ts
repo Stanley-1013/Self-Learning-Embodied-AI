@@ -13,11 +13,13 @@ const config: Config = {
     v4: true,
   },
 
-  url: 'https://localhost',
-  baseUrl: '/',
+  url: 'https://Stanley-1013.github.io',
+  baseUrl: '/Self-Learning-Embodied-AI/',
 
-  organizationName: 'local',
-  projectName: 'robotic-learning',
+  organizationName: 'Stanley-1013',
+  projectName: 'Self-Learning-Embodied-AI',
+  deploymentBranch: 'gh-pages',
+  trailingSlash: false,
 
   onBrokenLinks: 'warn',
 

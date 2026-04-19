@@ -2,6 +2,7 @@ import type {ReactNode} from 'react';
 import {useCallback} from 'react';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import {useLocation} from '@docusaurus/router';
+import useBaseUrl from '@docusaurus/useBaseUrl';
 import styles from './LocaleToggle.module.css';
 
 const SCROLL_KEY = 'locale-switch-scroll';
@@ -17,8 +18,9 @@ const SCROLL_TTL_MS = 5000;
  * Rendered via `src/theme/Root.tsx` on every page.
  */
 export default function LocaleToggle(): ReactNode {
-  const {i18n} = useDocusaurusContext();
+  const {i18n, siteConfig} = useDocusaurusContext();
   const {pathname} = useLocation();
+  const baseUrl = siteConfig.baseUrl;
 
   const currentLocale = i18n.currentLocale;
   const isDefault = currentLocale === i18n.defaultLocale;
@@ -39,14 +41,23 @@ export default function LocaleToggle(): ReactNode {
       // ignore
     }
 
+    // pathname from useLocation includes baseUrl, so strip it first
+    // to get the locale-relative path, then reconstruct with baseUrl
+    const pathWithinBase = pathname.startsWith(baseUrl)
+      ? pathname.slice(baseUrl.length - 1) // keep leading /
+      : pathname;
+
     let targetPath: string;
     if (isDefault) {
-      targetPath = `/en${pathname}`;
+      // Default locale → English: insert /en/ after baseUrl
+      targetPath = `${baseUrl}en${pathWithinBase}`;
     } else {
-      targetPath = pathname.replace(/^\/en(\/|$)/, '/');
+      // English → default locale: strip /en prefix from pathWithinBase
+      const stripped = pathWithinBase.replace(/^\/en(\/|$)/, '/');
+      targetPath = `${baseUrl.replace(/\/$/, '')}${stripped}`;
     }
     window.location.href = targetPath;
-  }, [pathname, isDefault]);
+  }, [pathname, isDefault, baseUrl]);
 
   return (
     <button
