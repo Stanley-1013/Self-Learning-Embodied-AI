@@ -1,12 +1,9 @@
 import type {ReactNode} from 'react';
 import {useCallback} from 'react';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
-import {useLocation} from '@docusaurus/router';
-import useBaseUrl from '@docusaurus/useBaseUrl';
 import styles from './LocaleToggle.module.css';
 
 const SCROLL_KEY = 'locale-switch-scroll';
-const SCROLL_TTL_MS = 5000;
 
 /**
  * Floating language toggle (FAB-style).
@@ -19,11 +16,9 @@ const SCROLL_TTL_MS = 5000;
  */
 export default function LocaleToggle(): ReactNode {
   const {i18n, siteConfig} = useDocusaurusContext();
-  const {pathname} = useLocation();
   const baseUrl = siteConfig.baseUrl;
 
-  const currentLocale = i18n.currentLocale;
-  const isDefault = currentLocale === i18n.defaultLocale;
+  const isDefault = i18n.currentLocale === i18n.defaultLocale;
   const targetLocale = isDefault ? 'en' : i18n.defaultLocale;
   const targetLabel = isDefault ? 'EN' : '中';
 
@@ -31,7 +26,6 @@ export default function LocaleToggle(): ReactNode {
   // (docusaurus.config.ts headTags) — no flash, runs before first paint.
 
   const handleClick = useCallback(() => {
-    // Save current scroll ratio (position / total height)
     const scrollRatio = document.body.scrollHeight > 0
       ? window.scrollY / document.body.scrollHeight
       : 0;
@@ -41,23 +35,39 @@ export default function LocaleToggle(): ReactNode {
       // ignore
     }
 
-    // pathname from useLocation includes baseUrl, so strip it first
-    // to get the locale-relative path, then reconstruct with baseUrl
-    const pathWithinBase = pathname.startsWith(baseUrl)
-      ? pathname.slice(baseUrl.length - 1) // keep leading /
-      : pathname;
+    // Read from window.location to avoid router-level pathname ambiguity
+    const fullPath = window.location.pathname;
+    const baseClean = baseUrl.replace(/\/$/, '');
 
-    let targetPath: string;
-    if (isDefault) {
-      // Default locale → English: insert /en/ after baseUrl
-      targetPath = `${baseUrl}en${pathWithinBase}`;
-    } else {
-      // English → default locale: strip /en prefix from pathWithinBase
-      const stripped = pathWithinBase.replace(/^\/en(\/|$)/, '/');
-      targetPath = `${baseUrl.replace(/\/$/, '')}${stripped}`;
+    // Strip baseUrl prefix
+    let afterBase = fullPath.startsWith(baseClean)
+      ? fullPath.slice(baseClean.length)
+      : fullPath;
+    if (!afterBase.startsWith('/')) {
+      afterBase = '/' + afterBase;
     }
-    window.location.href = targetPath;
-  }, [pathname, isDefault, baseUrl]);
+
+    // Strip any non-default locale prefix (handles ALL non-default locales, not just /en/)
+    const nonDefaultLocales = i18n.locales.filter((l) => l !== i18n.defaultLocale);
+    let pathWithoutLocale = afterBase;
+    for (const locale of nonDefaultLocales) {
+      const prefix = `/${locale}`;
+      if (afterBase === prefix) {
+        pathWithoutLocale = '/';
+        break;
+      }
+      if (afterBase.startsWith(prefix + '/')) {
+        pathWithoutLocale = afterBase.slice(prefix.length);
+        break;
+      }
+    }
+
+    const targetPath = targetLocale === i18n.defaultLocale
+      ? `${baseClean}${pathWithoutLocale}`
+      : `${baseClean}/${targetLocale}${pathWithoutLocale}`;
+
+    window.location.href = targetPath || '/';
+  }, [baseUrl, i18n.locales, i18n.defaultLocale, targetLocale]);
 
   return (
     <button

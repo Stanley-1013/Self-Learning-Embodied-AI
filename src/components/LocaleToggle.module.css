@@ -5,7 +5,9 @@
   position: fixed;
   bottom: clamp(1rem, 2vw, 1.5rem);
   right: clamp(1rem, 2vw, 1.5rem);
-  z-index: 999;
+  /* Below navbar/drawer (ifm-z-index-fixed = 200) so it doesn't block the
+     mobile hamburger menu, but above most content. */
+  z-index: 100;
 
   display: inline-flex;
   align-items: center;
@@ -63,14 +65,18 @@
   line-height: 1;
 }
 
-/* Ensure it doesn't overlap the Docusaurus bottom "back to top" button */
-@media (max-width: 576px) {
+/* On mobile, move FAB to the LEFT so it doesn't overlap the right-side
+   hamburger menu drawer or the bottom-right "back to top" button. */
+@media (max-width: 996px) {
   .fab {
-    bottom: 4.5rem;
+    bottom: 1rem;
+    right: auto;
+    left: 1rem;
     padding: 0.5rem 0.75rem;
     font-size: 0.78rem;
   }
 }
+
 
 /* Dark mode */
 [data-theme='dark'] .fab {

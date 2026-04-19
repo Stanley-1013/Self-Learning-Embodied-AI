@@ -83,7 +83,7 @@ function Masthead(): ReactNode {
             是一本給自己用的、能追蹤進度的參考手冊。
           </p>
           <div className={styles.actions}>
-            <Link className={styles.cta} to="/content/example/intro">
+            <Link className={styles.cta} to="/content/embodied-robotics/cpp-memory-optimization">
               進入第一章
               <span className={styles.ctaArrow} aria-hidden="true">→</span>
             </Link>

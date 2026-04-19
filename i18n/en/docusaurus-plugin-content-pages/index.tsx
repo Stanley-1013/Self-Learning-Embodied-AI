@@ -80,7 +80,7 @@ function Masthead(): ReactNode {
             a personal reference manual with progress tracking baked in.
           </p>
           <div className={styles.actions}>
-            <Link className={styles.cta} to="/content/example/intro">
+            <Link className={styles.cta} to="/content/embodied-robotics/cpp-memory-optimization">
               Enter the first chapter
               <span className={styles.ctaArrow} aria-hidden="true">→</span>
             </Link>
