@@ -215,3 +215,105 @@
 12. **穩定 > 精度 的 ISO 認證導向**：產業落地思維
 13. **DINOv2/CLIP 語義對齊 vs SIFT 幾何對齊**：2024 年前沿
 14. **VLA 大腦慢思考 + 傳統 VS 小腦快反射**：端到端 RL 無法取代的核心理由
+
+## Q3 補強（DNN Pose / Underactuated / Industrial Deployment）
+
+### 情境題 G：Deep Learning-based VS
+- **6D Pose Estimation 網路** (PoseCNN / DeepIM / FoundationPose)：
+  - 端到端 RGB-D → 物體 SE(3) 矩陣 → 餵 PBVS
+  - 對遮擋、弱紋理物體魯棒性幾何級數提升
+- **Keypoint DNN VS** (RTMPose / OpenPose)：
+  - 人體骨架 2D 關鍵點直接當 IBVS 特徵點 s
+  - 機械臂末端追蹤人手像素座標
+- **Direct Visual Servoing (DVS)**：
+  - **整張圖像像素強度作特徵，不提關鍵點**
+  - **光度誤差** `e = I(s(t)) - I*(s*)`
+  - **交互矩陣** `L_I = -∇I · L_s`
+  - 物理意義：6-DoF 運動 → L_s 算像素位置變化 → 結合空間灰度梯度 ∇I → 像素亮度變化
+  - **光照敏感**：亮度變 → 誤判相機偏
+  - **紋理豐富極準**：幾萬像素構超定方程免疫局部抖動雜訊 → 微米級對齊
+- **「6D Pose < 1mm 仍不能取代 IBVS」答題**：
+  - 6D Pose Estimation 是**開環瞬間快照**
+  - 即使網路極準，機械臂運動學誤差 + 手眼標定誤差放大 1mm → 幾公分
+  - **IBVS 是圖像空間閉環反饋系統**：持續推 s-s* → 0 強制保證物理絕對對齊
+  - **業界標配**：DNN 給強初始 Guess + IBVS 最後 5mm 物理絕對收斂
+
+### 情境題 H：Underactuated Systems VS（無人機 / 浮動基座）
+- **四旋翼 VS 挑戰**：6-DoF 控制但只 4 馬達輸入；向前平移必須 Pitch → 畫面特徵點巨大垂直位移 → IBVS 誤判震盪發散
+- **Virtual Camera / Fixed-Axis Formulation**：
+  - 數學構「虛擬相機」永遠與重力方向對齊（Roll=0, Pitch=0）
+  - `s_virt = K·R_tilt(φ,θ)·K⁻¹·s_real`
+  - IMU 獲當前傾角 R_tilt → 單應性投影實際像素到虛擬水平相機
+  - **虛擬相機畫面特徵運動純反映空間平移，完美剔除 Pitch/Roll 耦合**
+- **Height-only IBVS 解耦**：
+  - Z 軸（高度）= 總推力；Yaw = 反扭矩（互相獨立）
+  - 圖像特徵**縮放 (Scale)** 單控 Z 軸
+  - 圖像特徵**旋轉**單控 Yaw
+  - 耦合 6-DoF → 獨立控制環
+- **IBVS-Dynamic**：控制律直接嵌入無人機非線性動力學，輸出馬達推力與力矩
+- **「VS + Differential Flatness」答題**：
+  - 無人機欠驅動但**數學上是 Differential Flat System**
+  - 4 個 Flat Outputs `[x, y, z, ψ]` 解析出所有姿態與馬達推力
+  - **頂層 Virtual Camera IBVS**：不管姿態，算 3D 平移速度 + 偏航角速度
+  - **底層微分平坦控制器** (PX4 offboard)：Flat Outputs → 馬達指令
+  - **「視覺只管幾何，平坦性搞定動力學」** → Drone Racing + 集群穿梭靈魂
+- **平台**：PX4 offboard VS、CrazyFlie swarm visual tracking
+- **Virtual Camera C++**：
+  ```cpp
+  cv::Mat R_tilt = euler_to_rotation_matrix(-roll, -pitch, 0.0);
+  cv::Mat H = K * R_tilt * K.inv();
+  cv::Mat p_virt = H * p_real;
+  return cv::Point2f(p_virt.at<double>(0) / p_virt.at<double>(2),
+                     p_virt.at<double>(1) / p_virt.at<double>(2));
+  ```
+
+### 情境題 I：Industrial Deployment 工業實戰
+- **ISO 13849-1 PLd 安全認證**：
+  - 視覺算法跑工控機屬**非安全節點**
+  - VS 速度指令必須過**機器人本體控制器** (KUKA KRC4) 的**安全限速 + 奇異點迴避 + 碰撞檢測**攔截
+- **多速率控制閉環 (Cycle Time Trade-off)**：
+  - 底層位置環 1000 Hz (1ms)
+  - 工業相機 + 處理 30-100 Hz (10-33 ms)
+  - **解法**：KUKA RSI / ABB Integrated Vision 官方介面
+  - **Kalman Filter 或樣條插值**：30Hz 誤差平滑上採樣到 1000Hz 餵驅動器 → 避免高頻震顫
+- **CAD-based Visual Servoing**：
+  - 工業零件有精確 3D CAD 模型
+  - 不依賴 SIFT，**CAD 模型投影 2D 做邊緣梯度匹配 (Template / Edge-based Tracking)**
+  - 精度極高 + 對金屬反光強魯棒
+- **Bin Picking 實戰架構**：
+  1. **3D 結構光相機** (Photoneo) 獲稠密點雲
+  2. **6D Pose Estimation** (PPF 或 DL) 粗定位
+  3. **場景點雲作碰撞約束** → MoveIt! 生成無碰下降軌跡
+  4. 最後 5mm **夾爪上 2D 視覺伺服**精確閉環對齊抓取
+- **「學術 VS vs 工業 VS 評測指標不同」答題**：
+  - 學術追求**泛化性 + Zero-shot**
+  - 工業追求 **Cpk (製程能力指數) + MTBF + Cycle Time**
+  - 工廠不關心抓未知蘋果，只關心同一款齒輪 10 萬次 99.99% 成功 + 3 秒內 + 絕對不碰撞
+  - **「3D 結構光粗定位 + CAD 匹配 + RSI 高頻插值」確定性架構 vs 不可解釋端到端黑箱**
+- **平台**：Photoneo MotionCam-3D、Keyence CV-X、Cognex In-Sight、KUKA RSI、ABB Integrated Vision、Fanuc iRVision
+- **多速率控制 Python 概念**：
+  ```python
+  def robot_control_thread(t_in_vision_cycle):
+      # 1000 Hz 控制迴圈，線性/樣條插值 30 Hz 視覺誤差
+      factor = t_in_vision_cycle / vision_dt
+      smooth_err = last_err + (current_err - last_err) * factor
+      joint_vel = compute_inverse_jacobian(smooth_err)
+      send_to_robot_rsi(joint_vel)
+  ```
+
+### 面試 talking points（Q3）
+15. **DVS 光度誤差超定方程微米對齊**：分辨「只用關鍵點」vs「懂全圖伺服」
+16. **6D Pose < 1mm 仍需 IBVS 閉環**：開環 vs 閉環的根本差異
+17. **Virtual Camera 解耦 Pitch/Roll 耦合**：無人機 IBVS 工程核心技巧
+18. **VS + Differential Flatness 無人機靈魂**：視覺幾何 + 平坦性動力學的分工
+19. **RSI 30Hz→1000Hz 插值 + Kalman**：工業多速率控制標準
+20. **CAD-based Edge Matching 對反光魯棒**：工業 VS 與學術 SIFT 的關鍵差異
+21. **Cpk + MTBF 工業指標 vs Zero-shot 學術指標**：產業落地思維的 signature
+
+## 總結
+Ch16 視覺伺服 v2 完成 3 queries × 3 sub-topics = 9 sub-topics：
+- Q1: IBVS/PBVS/2.5D + Image Jacobian (Chaumette Conundrum) + Eye-in/Eye-to-Hand (AX=XB)
+- Q2: Dynamic VS (feedforward + PTP time sync) + Uncertainty (EKF blind dead-reckoning + Z-axis retreat) + Modern VLA (RT-2/OpenVLA/π0 + NeRF/3DGS + DINOv2 semantic)
+- Q3: DNN 6D Pose + DVS photometric + Underactuated (Virtual Camera + Differential Flatness) + Industrial (ISO 13849 PLd + CAD-based + RSI multi-rate + Bin Picking)
+
+深度已達 A 級。
