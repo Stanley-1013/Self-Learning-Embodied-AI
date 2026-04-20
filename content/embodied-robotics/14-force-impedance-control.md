@@ -261,15 +261,23 @@ Franka 的 libfranka API 強制要求 Cartesian K 為 SPD，這是「讀過 Hoga
 
 ### Adjoint Transform — 跨座標系 wrench 轉換
 
-把 wrench 從夾爪中心 A 平移到工具尖端 B：
+**Convention**（本章採用 Lynch & Park §3.4 標準）：wrench 排序 $W = [m, f]^T$（力矩在上、力在下），twist 排序 $V = [\omega, v]^T$。$T_{AB} = (R, p) \in SE(3)$ 表示 B 座標系在 A 座標系中的姿態。
+
+Twist 的伴隨矩陣（直接做座標變換的那個矩陣）：
 
 $$
-W_A = \mathrm{Ad}_{T_{AB}}^T \cdot W_B, \quad \mathrm{Ad}_T^T = \begin{bmatrix}R & \hat{p}R \\ 0 & R\end{bmatrix}
+\mathrm{Ad}_{T_{AB}} = \begin{bmatrix} R & 0 \\ \hat{p} R & R \end{bmatrix} \qquad (V_A = \mathrm{Ad}_{T_{AB}} V_B)
 $$
 
-其中 $\hat{p}$ 是平移向量的反對稱矩陣。
+其中 $\hat{p}$ 是平移向量的反對稱矩陣。Wrench 是 twist 的對偶，**以 $\mathrm{Ad}^T$ 反向變換**：
 
-**陷阱**：單純的力 $f$ 平移後會透過 $\hat{p}\cdot R\cdot f$ 被**耦合出額外力矩** $m$ ！開發者忽略這項 → 指令完全錯誤。
+$$
+W_A = \mathrm{Ad}_{T_{AB}}^T \cdot W_B
+$$
+
+也就是程式碼只需建構 $\mathrm{Ad}_T$ 一次、共軛轉換時套 `Ad_T.transpose()` 即可。
+
+**陷阱**：單純的力 $f$ 經過 $\hat{p} R \cdot f$ 這一塊會**耦合出額外力矩** $m$（力臂效應）！開發者忽略這項 → 指令完全錯誤。
 
 ### 對角陣 K 抓 30cm 長棍戳牆失穩之謎（面試經典）
 
@@ -286,12 +294,13 @@ $$
 Franka / KUKA iiwa FRI API 強制要求：K 必須**相對當前 TCP（工具中心點）** 的嚴格 SPD 矩陣。
 
 ```cpp
+// 建構 Ad_T = [R, 0; p̂R, R]（twist 伴隨矩陣；wrench 轉換用 Ad_T^T）
 Eigen::Matrix6d Ad_T;
-Ad_T.topLeftCorner(3,3)     = R;
-Ad_T.bottomRightCorner(3,3) = R;
-Ad_T.bottomLeftCorner(3,3)  = skew_symmetric(p) * R;  // 力臂耦合項
+Ad_T.topLeftCorner(3,3)     = R;                       // [ω] 區塊
 Ad_T.topRightCorner(3,3)    = Eigen::Matrix3d::Zero();
-Eigen::Matrix6d K_tcp = Ad_T.transpose() * K_flange * Ad_T;  // 一致性轉移
+Ad_T.bottomLeftCorner(3,3)  = skew_symmetric(p) * R;   // 力臂耦合項
+Ad_T.bottomRightCorner(3,3) = R;
+Eigen::Matrix6d K_tcp = Ad_T.transpose() * K_flange * Ad_T;  // 剛度共軛：W = Ad_T^T · W
 ```
 
 ### 操作空間慣量矩陣 $\Lambda$ 的物理直覺

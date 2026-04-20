@@ -47,7 +47,7 @@ sidebar_position: 19
 |----------|------|-----|-----|-----|
 | Policy type | Deterministic | Deterministic | Stochastic | Stochastic |
 | On/Off-policy | Off | Off | On | Off |
-| Exploration | OU noise | Target smoothing | Policy stochasticity | Maximum entropy |
+| Exploration | OU noise | Gaussian behavior noise (target smoothing is a critic-side regularizer) | Policy stochasticity | Maximum entropy |
 | Sample efficiency | High | High | Low | High |
 | Training stability | Poor | Medium | Good | Good |
 | Hyperparameter sensitivity | Very high | High | Medium | Low ($\alpha$ auto-tuned) |
@@ -182,7 +182,7 @@ PPO shines in **massively parallel GPU simulators** (Isaac Gym with thousands of
 
 1. **Actor-Critic = player + coach**: the Actor is the player making decisions on the field; the Critic is the coach watching the big picture and scoring from the sideline. "That pass was great" (positive advantage) — player passes more next time. "Too risky" (negative advantage) — player avoids it.
 
-2. **PPO clip = climbing safety rope**: policy updates are like rock climbing — you want to go higher (more reward), but the safety rope ($\varepsilon=0.2$) limits each step to at most 20% deviation. TRPO is a precision safety harness (strict KL constraint); PPO approximates it with a clip (industrial safety rope) — easier to build, nearly as effective.
+2. **PPO clip = climbing safety rope**: policy updates are like rock climbing — you want to go higher (more reward), but the safety rope clips the **probability ratio** $r_t = \pi_\theta / \pi_{\text{old}}$ into the interval $[1-\varepsilon, 1+\varepsilon]$ (typically $[0.8, 1.2]$); once $r_t$ leaves the band, that sample stops contributing gradient. Note: the clip is on the probability ratio, not on action deviation or KL directly. TRPO is a precision safety harness (strict KL constraint); PPO approximates it with a clip (industrial safety rope) — easier to build, nearly as effective.
 
 3. **SAC maximum entropy = explorer's mindset**: standard RL is "find one path and commit"; SAC is "find all viable paths and pick the best." The entropy term keeps the policy from being too certain, like an experienced explorer who never commits to a single route.
 

@@ -27,7 +27,7 @@ Every piece of data in a robot system — a LiDAR scan, a camera image, a joint 
 
 | Frame | Semantics | Typical publisher |
 |-------|-----------|-------------------|
-| `earth` | Earth-fixed, ECEF or lat/lon | GPS driver |
+| `earth` | Earth-fixed, ECEF (used to relate multiple `map` frames) | GPS driver |
 | `map` | Global, fixed, discontinuous jumps allowed | SLAM / localization |
 | `odom` | Continuous, smooth, but drifts over time | Wheel odometry / VIO |
 | `base_link` | Rigidly attached to robot chassis | Convention (identity) |
@@ -261,7 +261,7 @@ private:
 
 ## Common Misconceptions
 
-1. **Swapping parent and child in the broadcaster** — TF2 convention: the transform goes `parent_frame → child_frame`. If you accidentally broadcast `camera_link → base_link` (reversed), the tree structure breaks and downstream `lookupTransform` calls fail or return inverted poses. **Check**: `ros2 run tf2_tools view_frames` — arrows should point from parent to child.
+1. **Swapping parent and child in the broadcaster** — TF2 convention: a broadcast with `header.frame_id=parent, child_frame_id=child` encodes $T^{parent}_{child}$, the pose of the child expressed in the parent. Coordinate transforms then go the other way: a point in the child frame multiplied by $T^{parent}_{child}$ lands in the parent frame. If you accidentally broadcast `camera_link → base_link` (reversed), the tree structure breaks and downstream `lookupTransform` calls fail or return inverted poses. **Check**: `ros2 run tf2_tools view_frames` — arrows should point from parent to child.
 
 2. **Using `rclcpp::Time(0)` instead of `tf2::TimePointZero`** — `Time(0)` in ROS 2 means "the epoch" (January 1, 1970), not "latest available." The buffer will throw `ExtrapolationException` because it has no data from 1970. **Fix**: always use `tf2::TimePointZero` (C++) or `rclpy.time.Time()` (Python) to request the latest transform.
 
@@ -325,7 +325,7 @@ private:
 
 2. **Static vs Dynamic TF and REP-105 conventions** — tests ROS 2 fluency. **Bring out with**: "I use Static TF for anything bolted on (sensor extrinsics), Dynamic TF for anything that moves (odometry, joints). The `map → odom → base_link` chain separates global corrections from smooth local tracking — that's REP-105."
 
-3. **Quaternions over Euler angles for TF** — tests mathematical maturity. **Bring out with**: "TF2 stores rotations as quaternions internally because they avoid gimbal lock, interpolate smoothly via SLERP, and compose via multiplication. I use `setRPY()` for human-readable input but never store or transmit Euler angles."
+3. **Quaternions over Euler angles for TF** — tests mathematical maturity. **Bring out with**: "TF2 stores rotations as quaternions internally because they avoid gimbal lock, interpolate smoothly via SLERP, use only 4 parameters (vs 9 for a rotation matrix), and are cheap to renormalize. I use `setRPY()` for human-readable input but never store or transmit Euler angles."
 
 4. **Defensive `lookupTransform` patterns** — tests production robustness. **Bring out with**: "Every `lookupTransform` call is wrapped in try-catch because the transform may not exist yet at startup. I use `tf2::TimePointZero` for latest-available and set a reasonable timeout to avoid blocking the control loop."
 

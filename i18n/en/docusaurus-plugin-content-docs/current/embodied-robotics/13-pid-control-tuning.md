@@ -430,7 +430,7 @@ $$
 | Method | Formula | Traits |
 |--------|---------|--------|
 | Backward Euler | $s = (1 - z^{-1})/T$ | Simplest, severe high-frequency distortion |
-| **Tustin / Bilinear (recommended)** | $s = \frac{2}{T} \cdot \frac{1 - z^{-1}}{1 + z^{-1}}$ | Maps the entire left half-plane into the unit disk; Bode fidelity is the best |
+| **Tustin / Bilinear (recommended)** | $s = \frac{2}{T} \cdot \frac{1 - z^{-1}}{1 + z^{-1}}$ | Maps the left-half $s$-plane into the **interior** of the unit disk (stable poles stay stable); best Bode fidelity, but the $j\omega$ axis undergoes **frequency warping** — critical frequencies are usually corrected with pre-warping |
 | ZOH | -- | Staircase input -> best fits DAC scenarios physically |
 
 **Sampling-rate rule of thumb**: $f_s = f_{\text{BW}} \times 10 \sim 15$
@@ -488,10 +488,10 @@ Q-format arithmetic: left-shift gains by 10 bits (x 1024), then right-shift afte
 **Gain scheduling -- the real answer in 90% of industrial scenarios**:
 
 $$
-K_p(q) = K_{p_0} \cdot \frac{\det(M(q))}{\det(M_0)}, \quad K_d \text{ kept so the damping ratio stays constant}
+K_p^{(i)}(q) = K_{p_0}^{(i)} \cdot \frac{M_{ii}(q)}{M_{ii,0}}, \quad K_d^{(i)} \text{ kept so the damping ratio stays constant}
 $$
 
-**Physical meaning**: when the arm is extended $M(q)$ is large -> we need high $K_p$; folded -> low $K_p$. Wrong choice -> sluggish or oscillatory. Drone PID scaled by battery voltage (voltage scaling) follows the same logic.
+**Physical meaning**: for each joint $i$, a SISO PID actually feels the **diagonal element $M_{ii}(q)$** of the mass matrix (or the operational-space inertia $\Lambda_{ii}(q)$) — the "effective inertia along this axis right now". When the arm is extended some $M_{ii}$ grows → higher $K_p$; folded → lower $K_p$; wrong choice → sluggish or oscillatory. **Do not use $\det(M)$**: the determinant is a property of the fully coupled system, may vanish or explode near singularities, and does not correspond monotonically to the single-axis inertia a SISO PID sees. Drone PID scaled by battery voltage (voltage scaling) is a single-channel analogue of the same idea.
 
 <details>
 <summary>Deep dive: MRAC / STR / RL-based tuning + why industry does not use neural / RL PID</summary>

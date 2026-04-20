@@ -33,7 +33,7 @@ sidebar_position: 3
 | `acquire` | Nothing scheduled *after* this load can move *before* it | `ldar` instruction | Free (loads are already acquire) |
 | `release` | Nothing scheduled *before* this store can move *after* it | `stlr` instruction | Free (stores are already release) |
 | `acq_rel` | Both acquire and release on a single RMW operation | Both barriers | Nearly free |
-| `seq_cst` | Global total order across all seq_cst operations | Full `dmb` barrier | `mfence` on stores |
+| `seq_cst` | Global total order across all seq_cst operations | Pure load/store = `LDAR`/`STLR` (same as acquire/release); seq_cst RMW (`fetch_add` etc.) adds `DMB ISH` | `mfence` on stores; loads free |
 
 **Physical meaning**: `release` is "seal and ship the envelope" — everything I wrote before this store is finalized. `acquire` is "open the envelope" — everything I read after this load sees the sender's finalized state. `seq_cst` is "everyone submits their exam at the same desk, in a single queue" — expensive, but unambiguous.
 
@@ -54,12 +54,12 @@ $$
 
 ### `std::atomic_flag`
 
-The **only** type the standard guarantees is always lock-free. Supports only `test_and_set()` and `clear()` — no load, no copy, no assignment. Use it to build spinlocks or one-shot signal flags.
+The **only** type the standard guarantees is always lock-free. Pre-C++20 it exposed only `test_and_set()` and `clear()`; **C++20 added `test()`, `wait()`, `notify_one()`, and `notify_all()`**, enabling non-busy-wait spinlocks. Still no load/copy/assign — deliberately minimal. Use it to build spinlocks or one-shot signal flags.
 
 **Position in the Sense → Plan → Control Loop**:
 - **Control ↔ Planning boundary**: Acquire-release on atomic pointers enables lock-free, wait-free data handoff between a high-frequency control loop (1 kHz+) and a lower-frequency planner (10–100 Hz) without mutex jitter
 - **Perception → Planning**: Sensor fusion pipelines use atomic pointer swaps (double/triple buffer) so the reader always gets a consistent snapshot without blocking the writer
-- **Critical on ARM**: Most robot CPUs (Cortex-A, Jetson) have weak memory ordering — blindly defaulting to `seq_cst` costs a full `dmb` barrier per operation, burning cycles that a 1 kHz loop cannot afford
+- **Critical on ARM**: Most robot CPUs (Cortex-A, Jetson) have weak memory ordering — on ARMv8 the cost of `seq_cst` shows up primarily on RMW operations (`fetch_add`, CAS) and in the compiler's reordering freedom, not on plain load/store (which is `LDAR`/`STLR`, same as acquire/release). On ARMv7 and for RMW-heavy paths, `seq_cst` can burn cycles a 1 kHz loop cannot afford
 
 $$
 \text{If } A \xrightarrow{\text{happens-before}} B, \text{ then all side effects of } A \text{ are visible to } B
@@ -101,17 +101,26 @@ If both operations used `memory_order_relaxed`, there is no synchronizes-with re
 
 ### The cost of seq_cst on ARM
 
+The accepted C/C++ → ARMv8 mapping (used by GCC and Clang) is:
+
 ```
 // ARM64 assembly for seq_cst store:
-dmb ish       // full barrier — drain store buffer, sync caches
-str x0, [x1]  // the actual store
-dmb ish       // another full barrier
+stlr x0, [x1]  // same instruction as release store
+
+// ARM64 assembly for seq_cst load:
+ldar x0, [x1]  // same instruction as acquire load
+
+// ARM64 assembly for seq_cst RMW (e.g. fetch_add):
+ldaxr w2, [x1]    // load-acquire-exclusive
+add   w2, w2, w3
+stlxr w4, w2, [x1]  // store-release-exclusive (retries on failure)
+// plus a DMB ISH if compiler picks the stronger mapping
 
 // ARM64 assembly for release store:
 stlr x0, [x1]  // single instruction, barrier baked in
 ```
 
-On a Cortex-A72 (Jetson TX2), a `dmb ish` costs ~20–40 ns. In a 1 kHz control loop (1 ms budget), two unnecessary barriers per atomic operation across a handful of shared variables can consume 5–10% of the budget for no gain.
+Concretely: on ARMv8, **pure seq_cst load/store costs nothing beyond acquire/release** — both map to `LDAR`/`STLR`. The `DMB ISH` cost (~20–40 ns on Cortex-A72) shows up only for seq_cst RMW (`fetch_add`, `exchange`, CAS) and for ARMv7 (pre-`LDAR`/`STLR`). seq_cst can still hurt on ARMv8 in a different way: it restricts the compiler from reordering instructions across other atomic operations, which can reduce scheduling freedom. Verify what you care about: paste `std::atomic<int>::store(x, memory_order_seq_cst)` with `-march=armv8-a -O2` into Godbolt — you will see a single `stlr`.
 
 ### Fences vs per-variable ordering
 
@@ -179,8 +188,8 @@ For robotics: hazard pointers or epoch-based reclamation are the pragmatic choic
 
 **Observable in a robot system**:
 - Lock-free double buffer with `relaxed` ordering → works perfectly on x86 dev machine → **sporadic garbage readings on Jetson** (ARM weak ordering)
-- Switching to `acquire`/`release` on the pointer swap → readings become consistent; `perf stat` shows zero `dmb` instructions beyond the necessary pair
-- Using `seq_cst` everywhere on ARM → control loop jitter increases by 3-8% under load; switching to targeted `acquire`/`release` eliminates the overhead
+- Switching to `acquire`/`release` on the pointer swap → readings become consistent (the ordering semantics were what was missing, not barrier count)
+- Using `seq_cst` on RMW-heavy paths on ARM → control loop jitter increases under load; switching to targeted `acquire`/`release` on CAS loops eliminates the extra `DMB ISH` and restores headroom
 
 ## Implementation Link
 
@@ -273,7 +282,7 @@ Key design choices:
 
 ## Common Misconceptions
 
-1. **Thinking `seq_cst` is free on x86 so you can use it everywhere** — x86 stores are naturally `release` and loads are naturally `acquire`, so `acquire`/`release` is indeed free. But `seq_cst` *stores* still require an `mfence` instruction (~20 ns). More critically, the code will eventually run on ARM (Jetson, Pi, phone SoCs) where `seq_cst` costs a full `dmb` barrier per operation. **Rule**: default to `acquire`/`release` for producer-consumer; use `seq_cst` only when you need a global total order across multiple atomics and can articulate *why*.
+1. **Thinking `seq_cst` is free on x86 so you can use it everywhere** — x86 stores are naturally `release` and loads are naturally `acquire`, so `acquire`/`release` is indeed free. But `seq_cst` *stores* still require an `mfence` instruction (~20 ns). On ARMv8, seq_cst load/store maps to the same `LDAR`/`STLR` as acquire/release — but seq_cst RMW (`fetch_add`, `compare_exchange_*`) picks up a `DMB ISH` full barrier, and seq_cst globally restricts reordering across atomics. **Rule**: default to `acquire`/`release` for producer-consumer; reach for `seq_cst` only when you need a global total order across multiple atomics and can articulate *why*.
 
 2. **Confusing `volatile` with `atomic`** — `volatile` tells the compiler "don't optimize away this read/write" (for memory-mapped I/O). It provides **zero** atomicity, **zero** ordering guarantees, and **zero** cross-thread visibility semantics. On MSVC, `volatile` historically implied acquire-release, which tricked a generation of Windows developers into thinking it was safe. It is not. Use `std::atomic`.
 
@@ -328,7 +337,7 @@ Key design choices:
 3. **Fusion thread reads**: At 200 Hz, loads all three sensor pointers with `memory_order_acquire`. Each acquire-load establishes a happens-before with the corresponding sensor's release-store, guaranteeing a consistent snapshot of that sensor's data.
 4. **Why not a single shared buffer**: Different update rates mean sensors would contend on a shared lock or atomic — unnecessary. Per-sensor isolation eliminates all cross-sensor contention.
 5. **Cache alignment**: Each sensor's atomic pointer + buffer pair should sit on its own cache line (`alignas(64)`) to prevent false sharing between sensor threads.
-6. **Why not `seq_cst`**: On a Cortex-A72, `seq_cst` would add 2 `dmb` barriers per sensor per update. With 3 sensors updating at a combined ~1040 Hz, that is ~2080 unnecessary barriers per second. Acquire-release achieves the same correctness with zero extra barriers beyond the `stlr`/`ldar` instructions.
+6. **Why not `seq_cst`**: For the pointer-swap `store`/`load` themselves, ARMv8 emits the same `STLR`/`LDAR` regardless of whether you pick seq_cst or release/acquire — the barrier count is identical. But seq_cst also forces a global total order across *all* seq_cst atomics, which constrains compiler scheduling and adds `DMB ISH` to any RMW path (if you later reach for `exchange`/`fetch_add`). Acquire-release communicates *exactly* the ordering the readers need — producer-to-consumer synchronizes-with — without the cross-variable total-order tax.
 
 **What the interviewer wants to hear**: Per-sensor double buffer with atomic pointer swap; acquire-release is sufficient (no seq_cst); wait-free because each sensor has its own atomic — no CAS contention; cache-line isolation for the per-sensor atomics.
 
@@ -336,7 +345,7 @@ Key design choices:
 
 ## Interview Angles
 
-1. **"I never default to `seq_cst`"** — This signals hardware awareness. On x86, the cost is hidden (just an `mfence`), but on ARM/RISC-V (every Jetson, every phone SoC, every embedded board), `seq_cst` costs a full `dmb` barrier. In a 1 kHz control loop, unnecessary barriers are measurable jitter. Bring out with: "For producer-consumer patterns I use acquire-release because it gives exactly the ordering I need without the global-total-order tax that seq_cst imposes on weak architectures."
+1. **"I never default to `seq_cst`"** — This signals hardware awareness. On x86 the cost is an `mfence` on stores. On ARMv8 pure seq_cst load/store maps to the same `LDAR`/`STLR` as acquire/release — but seq_cst RMW (`fetch_add`, CAS) picks up a `DMB ISH`, and seq_cst globally restricts compiler reordering across atomics. Bring out with: "For producer-consumer patterns I use acquire-release because it expresses exactly the synchronizes-with edge I need, without the global-total-order constraint that restricts the compiler and taxes any RMW paths I add later."
 
 2. **ABA awareness and memory reclamation** — This is the dividing line between someone who read about lock-free and someone who has built it. Bring out with: "CAS compares bit patterns, not identity — so I always consider whether the pointed-to node could be recycled. My go-to fix is a tagged pointer for simple stacks; for queues with high churn, I reach for hazard pointers or epoch-based reclamation."
 

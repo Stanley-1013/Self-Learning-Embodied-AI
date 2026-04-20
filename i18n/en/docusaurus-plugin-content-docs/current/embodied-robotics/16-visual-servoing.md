@@ -63,7 +63,7 @@ $$
 
 **Physical meaning**:
 - **Translation columns (first three) scale as $1/Z$** — farther points produce smaller pixel velocities for the same camera translation (intuition: distant mountains move slowly, nearby objects move fast)
-- **Rotation columns (last three) are $Z$-independent** — rotational pixel flow depends only on pixel position, not depth
+- **Rotation columns' coefficients do not contain $Z$ explicitly** — coefficients depend only on polynomials of pixel position ($x, y, 1+x^2, 1+y^2, xy$) and do not carry $Z$; this does **not** mean rotational motion's physical effect is fully decoupled from depth
 - **Unknown $Z$ is the central difficulty of IBVS** — this is the root of the "Depth Ambiguity" problem
 
 **2. IBVS Control Law** (the classic proportional form):
@@ -77,10 +77,12 @@ $$
 **3. PBVS Control Law**:
 
 $$
-v_c = -\lambda \begin{pmatrix} {^c}t - {^{c^*}}t \\ \theta u \end{pmatrix}
+v_c = -\lambda \begin{pmatrix} {^{c^*}}t_c \\ \theta u \end{pmatrix}
 $$
 
-**Physical meaning**: proportional control directly in 3D space — translation error plus rotation error (axis-angle representation). Cartesian trajectory is a straight line, but accuracy is entirely bounded by $^cT_o$ estimation quality and hand-eye calibration accuracy.
+where $[R, {^{c^*}}t_c] = {^{c^*}}T_c = ({^c}T_{c^*})^{-1}$ — the **current camera pose expressed in the target (desired) camera frame**; $\theta u$ is the axis-angle (angle × axis) of $R$.
+
+**Physical meaning**: proportional control directly in 3D space — translation error plus rotation error (axis-angle representation); both components must be in the **same frame** (here, the target camera frame $c^*$). Cartesian trajectory is a straight line, but accuracy is entirely bounded by $^cT_o$ estimation quality and hand-eye calibration accuracy. **Frame caveat**: do **not** subtract two absolute translation vectors `${^c}t - {^{c^*}}t$` — the frames are inconsistent and the sign clashes with the axis-angle rotation term (see Chaumette & Hutchinson 2006, Eq. 22).
 
 **4. Hand-Eye Calibration Core Equation (Tsai-Lenz 1989)**:
 
@@ -135,7 +137,7 @@ The rank of $L_s$ determines controllability. Common singular configurations:
 
 1. **All feature points coplanar and parallel to the image plane**: all $Z$ identical, $L_s$ loses rank along the optical axis → $v_z$ uncontrollable
 2. **Feature points collinear**: $L_s$ rank < 6, some DoFs completely uncontrollable
-3. **Too few feature points**: $n$ points give $2n$ rows; **at least 4 non-coplanar points** needed for full rank (6)
+3. **Too few feature points**: $n$ points give $2n$ rows; **at least 4 non-collinear points** needed for full rank (6); 4 coplanar-but-non-collinear points suffice (the classic Chaumette result) — non-coplanar is not required
 
 ### Why 4 Points, Not 3
 

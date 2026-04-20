@@ -19,7 +19,7 @@ sidebar_position: 1
 
 ### Stack vs Heap
 
-**Stack（堆疊）**：編譯器自動配置與釋放，生命週期隨作用域結束自動銷毀。**配置沒有任何執行期開銷**。每個 thread 預設約 1 MB，4096 個 thread 就耗盡 32-bit 的 4 GB 位址空間。
+**Stack（堆疊）**：編譯器自動配置與釋放，生命週期隨作用域結束自動銷毀。**配置沒有任何執行期開銷**。每個 thread 有獨立 stack，預設大小依平台：**Linux 8 MB、Windows 1 MB**（可用 `pthread_attr_setstacksize` 調整）。在 32-bit 位址空間下，大量 thread 仍會吃掉可用 VA（kernel 先佔 1–2 GB）。
 
 **Heap（堆積）**：透過 `new`/`malloc` 動態請求。呼叫記憶體管理器的開銷可能耗費**數千次記憶體存取指令**，涉及系統呼叫、鎖競爭、碎片合併。
 
@@ -32,18 +32,18 @@ sidebar_position: 1
 | 指標 | 所有權語意 | 成本 |
 |------|-----------|------|
 | `unique_ptr` | 獨佔，只能 `move` 轉移 | **零成本**（`-O2` 後等同 raw pointer） |
-| `shared_ptr` | 共享，引用計數管理 | 昂貴（atomic increment/decrement + full memory barrier） |
+| `shared_ptr` | 共享，引用計數管理 | 昂貴（atomic increment 用 relaxed；decrement 用 acq_rel，只有歸零觸發 destructor 那次才需屏障） |
 | `weak_ptr` | 觀察但不擁有，打破循環引用 | `lock()` 做 atomic 嘗試加強引用 |
 
 `make_shared` 比 `new` 好：一次配置同時放物件與控制塊（省一次 heap 分配、記憶體連續）。
 
 ### Memory Pool / Arena Allocator
 
-預先配置一大塊記憶體、分割成固定大小的區塊，配置/釋放只需從 free list pop/push — **O(1)、無碎片、無鎖**。測試：100 萬個實例，pool **4 ms** vs `malloc` **64 ms**（**15× 快**）。
+預先配置一大塊記憶體、分割成固定大小的區塊，配置/釋放只需從 free list pop/push — **O(1)、無碎片、無鎖**。測試：100 萬個實例，pool **4 ms** vs `malloc` **64 ms**（**16× 快**）。
 
 ### Cache Line 與 False Sharing
 
-CPU 快取以 **32 或 64 bytes** 的 cache line 為單位讀寫。多個 thread 修改同一 line 內的不同變數 → cache line 所有權在核心間乒乓轉移 → **效能斷崖**。用 `alignas(64)` 或 C++17 `std::hardware_destructive_interference_size` 隔開。
+CPU 快取以 cache line 為單位讀寫，**現代主流架構都是 64 bytes**（x86-64、ARMv8 Cortex-A/Neoverse、Apple M 系列皆然；POWER 是 128 bytes）。多個 thread 修改同一 line 內的不同變數 → cache line 所有權在核心間乒乓轉移 → **效能斷崖**。用 `alignas(64)` 或 C++17 `std::hardware_destructive_interference_size` 隔開。
 
 **在感知 → 規劃 → 控制閉環的位置**：
 - **不是某個節點，是所有節點的底層基礎設施**
@@ -192,13 +192,13 @@ void control_callback() {
 
 ## 常見誤解
 
-1. **以為 `shared_ptr` 是免費的** — 每次 copy 都觸發 atomic increment（完整記憶體屏障），多 thread 下開銷極大。**避開**：只讀場景傳 `const T&` 或 `.get()`，不要無腦 pass-by-value。
+1. **以為 `shared_ptr` 是免費的** — 每次 copy 都觸發 atomic increment（即便是 relaxed，也仍是原子指令），多 thread 競爭同一個 `shared_ptr` 時開銷會放大。**避開**：只讀場景傳 `const T&` 或 `.get()`，不要無腦 pass-by-value。
 
 2. **在即時 callback 用 `vector::push_back`** — `size == capacity` 時觸發 realloc：申請雙倍記憶體 + 全量拷貝 + 舊迭代器全部失效。**避開**：初始化 `reserve(N)` 或改用 `std::array`。
 
 3. **以為 false sharing 只在 HPC 才重要** — 多核機器人系統一樣中招。把不同 thread 更新的計數器/狀態塞同一個 struct → cache ping-pong。**避開**：`alignas(64)` 隔開。
 
-4. **以為 `std::string` 很輕量** — SSO（Small String Optimization）只管短字串（通常 < 22 bytes），超過就 heap 分配。迴圈內反覆拼接可慢到 **170×**。**避開**：迴圈外宣告 + `clear()` 復用，或 `reserve()`。
+4. **以為 `std::string` 很輕量** — SSO（Small String Optimization）只管短字串，**閾值依實作而定（libstdc++/MSVC 15 bytes、libc++ 22 bytes）**，超過就 heap 分配。迴圈內反覆拼接可慢到 **170×**。**避開**：迴圈外宣告 + `clear()` 復用，或 `reserve()`。
 
 ## 練習題
 

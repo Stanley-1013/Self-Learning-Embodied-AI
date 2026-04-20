@@ -75,9 +75,9 @@ Per-entry meaning:
 - $a_i \cos\theta_i / a_i \sin\theta_i$: link length $a_i$ projected onto the parent X/Y axes after rotation by $\theta_i$
 - $d_i$: pure linear translation along the parent Z axis
 
-**Key differences between Standard and Modified DH**:
-- **Standard DH** (original Denavit): frame $i$ attaches to the **distal end** of link $i$; uses $a_i, \alpha_i$ between axis $i$ and axis $i+1$; multiplication order is `Rot_Z → Trans_Z → Trans_X → Rot_X`
-- **Modified DH** (Craig's version): frame $i$ attaches to the **proximal end** of link $i$; uses $a_{i-1}, \alpha_{i-1}$ between axis $i-1$ and axis $i$; multiplication order is `Rot_X → Trans_X → Rot_Z → Trans_Z`
+**Key differences between Standard and Modified DH** (disambiguated by which joint axis $Z_i$ aligns with):
+- **Standard DH** (original Denavit): $Z_i$ of frame $i$ aligns with **joint axis $i+1$**; $a_i, \alpha_i$ describe the geometry between axis $i$ and axis $i+1$; multiplication order is `Rot_Z → Trans_Z → Trans_X → Rot_X`
+- **Modified DH** (Craig's version): $Z_i$ of frame $i$ aligns with **joint axis $i$**; $a_{i-1}, \alpha_{i-1}$ describe the geometry between axis $i-1$ and axis $i$; multiplication order is `Rot_X → Trans_X → Rot_Z → Trans_Z`
 
 **Industry choice**: textbooks commonly use Standard DH; Modified DH is more robust for tree topologies, closed chains, and parallel adjacent axes. Modern ROS kinematics libraries (Orocos KDL, Pinocchio internals) tend toward Modified DH, or skip DH entirely in favor of Product of Exponentials (screw theory).
 
@@ -164,7 +164,8 @@ def forward_kinematics(dh_table, joint_values, tool_transform=None):
     return T
 
 
-# Example: approximate UR5 Standard DH table
+# Example: UR5 Standard DH table (values below are rounded; exact values per Universal Robots:
+# d_1=0.089159, d_4=0.10915, d_5=0.09465, d_6=0.0823, a_2=-0.425, a_3=-0.39225)
 ur5_dh = [
     (0,      np.pi/2,  0.089,  0),
     (-0.425, 0,        0,      0),

@@ -42,17 +42,17 @@ $$
 | Ordering | 語意 | 成本（ARM） | 成本（x86） |
 |----------|------|-------------|-------------|
 | `relaxed` | 只保證原子性，不保證順序 | 最低 | 最低 |
-| `consume` | 僅 data-dependent 順序（**已 deprecated**） | — | — |
+| `consume` | 僅 data-dependent 順序（**實務上棄用 — 所有主流 compiler 都當成 acquire 處理；但標準未正式 deprecate**） | — | — |
 | `acquire` | **此操作後面的讀寫不可排到此操作之前** | `ldar` 指令 | 免費（x86 load 天生 acquire） |
 | `release` | **此操作前面的讀寫不可排到此操作之後** | `stlr` 指令 | 免費（x86 store 天生 release） |
 | `acq_rel` | 同時具備 acquire + release | 雙向屏障 | 近乎免費 |
-| `seq_cst` | **所有 thread 看到完全相同的操作全序** | `dmb` 全屏障，**代價極大** | `mfence`，有代價 |
+| `seq_cst` | **所有 thread 看到完全相同的操作全序** | 純 load/store 就是 `LDAR`/`STLR`（和 acquire/release 同指令）；seq_cst RMW（如 `fetch_add`）才多一道 `DMB ISH` | `mfence` on stores，load 免費 |
 
 $$
 \text{relaxed} \subset \text{acquire/release} \subset \text{seq\_cst}
 $$
 
-**物理意義**：ordering 越強，硬體插入的 memory barrier 越重。x86 是強排序架構（store 天生 release、load 天生 acquire），所以 acquire-release 幾乎免費；ARM 是弱排序架構，每一級都要額外指令。
+**物理意義**：ordering 越強，硬體插入的同步工作越多。x86 是強排序架構（store 天生 release、load 天生 acquire），所以 acquire-release 幾乎免費，只有 seq_cst store 要 `mfence`。ARMv8 則使用 `LDAR`/`STLR` 一條指令承擔 seq_cst load/store 語意，**額外的 `DMB ISH` 只出現在 seq_cst 的 RMW 操作**（`fetch_add`/`exchange` 等）或舊的 ARMv7 映射上。
 
 ### `std::atomic<T>` 與 CAS
 
@@ -78,7 +78,7 @@ $$
 
 ### `std::atomic_flag`
 
-**唯一被 C++ 標準保證 lock-free 的型別**。只有 `test_and_set()` 和 `clear()` 兩個操作，沒有 copy/assign/load/store — 極度精簡，適合實作 spinlock。
+**唯一被 C++ 標準保證 lock-free 的型別**。C++17 時期只有 `test_and_set()` 與 `clear()`；**C++20 起新增了 `test()`、`wait()`、`notify_one()`、`notify_all()`**，可用來實作不忙等的 spinlock。沒有 copy/assign/load/store，極度精簡。
 
 <details>
 <summary>深入：Memory ordering 在硬體層的實現機制</summary>
@@ -109,11 +109,17 @@ ARM 允許幾乎所有重排，需要顯式屏障：
 - `dmb`（Data Memory Barrier）：全屏障，seq_cst 需要
 
 ```
-ARM 的 seq_cst store = STLR + DMB（代價比 x86 大很多）
-ARM 的 acquire load  = LDAR
-ARM 的 release store = STLR
-ARM 的 relaxed       = 普通 LDR/STR（最快）
+ARMv8 的 seq_cst store = STLR（沒錯，就一條，和 release store 相同指令）
+ARMv8 的 seq_cst load  = LDAR（和 acquire load 相同指令）
+ARMv8 的 acquire load  = LDAR
+ARMv8 的 release store = STLR
+ARMv8 的 relaxed       = 普通 LDR/STR（最快）
+
+差異在 RMW：seq_cst 的 fetch_add/exchange 會被編成 LDAXR/STLXR 迴圈 + 前後可能加 DMB ISH；
+acquire-release 版本則不需要。舊的 ARMv7 因為沒有 LDAR/STLR，才必須用 DMB 全屏障實現 seq_cst。
 ```
+
+（想驗證？Godbolt 選 `aarch64` 加 `-O2`，把 `std::atomic<int>::store(x, memory_order_seq_cst)` 丟進去，會看到單一條 `stlr`。）
 
 ### Fence vs Per-Variable Ordering
 
@@ -269,7 +275,7 @@ public:
 };
 ```
 
-**注意**：`TaggedPtr` 需要 128-bit CAS（`cmpxchg16b` on x86-64），確認目標平台支援 `std::atomic<TaggedPtr>::is_lock_free()`。
+**注意**：`TaggedPtr` 需要 128-bit CAS — x86-64 是 `cmpxchg16b`，ARMv8.1 以後是 `CASP`，再舊的 ARMv8 用 `LDXP/STXP` pair 實作。確認目標平台支援 `std::atomic<TaggedPtr>::is_lock_free()`。
 
 ### Hazard Pointer 概念
 
@@ -420,18 +426,22 @@ void control_loop(SensorFusion& fusion) {
 
 ### 為什麼 acquire-release 而不是 seq_cst？
 
-在 ARM（Jetson Orin 用 ARMv8.2）：
+在 ARM（Jetson Orin 用 ARMv8.2）的純 load/store 路徑上：
 - `acquire load` = `LDAR`：1 條指令
 - `release store` = `STLR`：1 條指令
-- `seq_cst store` = `STLR + DMB`：多 1 條全屏障 ≈ **50–100 cycles**
+- `seq_cst load` = `LDAR`，`seq_cst store` = `STLR` — **和 acquire/release 相同指令**
 
-3 個 sensor × 1000 Hz = 3000 次/秒。省下 3000 × 100 cycles/s = **30 萬 cycles/s** 的無謂開銷。
+純 pointer swap（`store`/`load`）用 seq_cst 與用 release/acquire 在 ARMv8 產生的指令相同，單看 barrier 沒有差異。**真正會差的地方**是：
+- seq_cst 的 RMW（`fetch_add`、`exchange`、`compare_exchange_*`）會被編成 `LDAXR/STLXR` 迴圈，外加 `DMB ISH` 全屏障 — 在高頻控制迴圈裡才是可量測的成本
+- seq_cst 同時限制了**跨多個原子變數**的重排，會阻止 compiler 做激進的指令排程
+
+因此選 acquire-release 的實際收益是：**CAS 路徑省下 DMB、同時放寬 compiler 的排程空間**。純 pointer swap 若只為了「省 DMB」而降級，在 ARMv8 上是沒意義的 — 真正要降的是 seq_cst 的 RMW 與會阻擋 compiler 重排的語意。
 
 </details>
 
 ## 常見誤解
 
-1. **以為 `seq_cst` 在所有平台都免費** — 在 x86 上 acquire-release 幾乎免費（硬體天生強排序），所以用 `seq_cst` 感覺沒差。但在 ARM（Jetson、手機、嵌入式）上，`seq_cst` 需要 `dmb` 全屏障，**代價比 acquire-release 大 10–50 倍**。機器人系統常跑在 ARM 上 — **不要無腦 seq_cst**。
+1. **以為 `seq_cst` 在所有平台都免費** — 在 x86 上 acquire-release 幾乎免費（硬體天生強排序），`seq_cst` store 要 `mfence`。ARMv8 則是純 load/store 路徑上 seq_cst 和 acquire/release 產生相同的 `LDAR`/`STLR`；**真正會貴的是 seq_cst 的 RMW**（`fetch_add`、`exchange`、CAS 等）會多一道 `DMB ISH` 全屏障，以及 seq_cst 會限制 compiler 跨變數重排。舊的 ARMv7（沒有 `LDAR`/`STLR`）才是 seq_cst 貴到離譜的場景。結論仍是：**不要無腦 seq_cst**，但原因是 RMW 成本與跨變數的排序語意，不是單筆 store 的 barrier。
 
 2. **以為 `volatile` 等於 `atomic`** — `volatile` 只告訴編譯器「不要優化掉這個讀寫」，但**不保證原子性**，也**不插入任何 memory barrier**。多 thread 存取必須用 `std::atomic`，`volatile` 只用在 memory-mapped I/O。
 
@@ -514,7 +524,7 @@ void control_loop(SensorFusion& fusion) {
 
 2. **ABA + Memory Reclamation** — 測的是 lock-free 程式設計的深度。**帶出**：「Lock-free 資料結構最容易踩的坑是 ABA 問題。CAS 只比較值，不知道值是否曾經變過。解法是 tagged pointer 或 hazard pointer — 前者簡單但需要 128-bit CAS，後者更通用但實作複雜。」
 
-3. **CAS weak 的 spurious failure** — 測的是否真懂硬體。**帶出**：「ARM 用 LL/SC 實現 CAS，天生可能 spurious fail。所以 `compare_exchange_weak` 必須放在迴圈裡，`strong` 版本內部其實也是迴圈 — 自己寫迴圈用 weak 反而更高效。」
+3. **CAS weak 的 spurious failure** — 測的是否真懂硬體。**帶出**：「ARM 用 LL/SC 實現 CAS，天生可能 spurious fail，所以 `compare_exchange_weak` 必須放在迴圈裡。在 LL/SC 架構上 `strong` 版本會被實作成『用 weak + 內部小迴圈過濾 spurious fail』；在 x86 上 `strong` 直接就是一條 `lock cmpxchg`，沒有迴圈。如果外層本來就要 retry（lock-free 演算法），自己寫迴圈用 weak 反而能和硬體語意一致、效能最好。」
 
 4. **Acquire-release 是工業級 lock-free 的基石** — 測的是實戰能力。**帶出**：「SPSC ring buffer、double buffer pointer swap、lock-free queue — 這些機器人即時通訊的核心元件，全都基於 acquire-release 模式。掌握這個模式就能處理 90% 的 lock-free 場景。」
 

@@ -41,7 +41,7 @@ sidebar_position: 11
 | Order | Continuity | When to use | Fatal flaw |
 |------|-------|---------|---------|
 | Linear (1st) | $C^0$ | Never use | Acceleration is a Dirac delta → infinite instantaneous torque blows the current loop |
-| Cubic (3rd) | $C^1$ (velocity continuous) | Teaching demo | Acceleration jumps at endpoints → infinite jerk → micro-jitter |
+| Cubic (3rd) | $C^1$ (velocity continuous) | Teaching demo | A single segment cannot specify acceleration at both endpoints → when multiple cubic segments are joined, acceleration is discontinuous at junctions → jerk diverges → micro-jitter |
 | **Quintic (5th)** | **$C^2$ (acceleration continuous)** | **Industrial PTP gold standard** | No major flaw |
 | Septic (7th) | $C^3$ (jerk continuous) | CNC laser cutting, high-precision machining | More parameters, heavier compute |
 | LSPB (trapezoidal + parabolic blend) | $C^1$ | Low-compute PLCs, simple CNC moves | Guarantees only velocity continuity |
@@ -57,7 +57,7 @@ $$
 q(t) = a_0 + a_1 t + a_2 t^2 + a_3 t^3
 $$
 
-**Physical meaning**: 4 coefficients exactly solve 4 boundary conditions (start position/velocity, end position/velocity); the simplest smooth trajectory. But acceleration $\ddot{q} = 2a_2 + 6a_3 t$ is only linear in time, and at segment junctions you get a jerk step → micro-jitter.
+**Physical meaning**: 4 coefficients exactly solve 4 boundary conditions (start position/velocity, end position/velocity); the simplest smooth trajectory. Within a single segment, acceleration $\ddot{q} = 2a_2 + 6a_3 t$ is a continuous linear function, but its start/end values cannot be specified — so **when multiple cubic segments are joined, acceleration is discontinuous at junctions → jerk has a step → micro-jitter**.
 
 2. **Quintic polynomial** (adds acceleration boundary conditions):
 
@@ -224,7 +224,7 @@ Given $n$ waypoints, use $n-1$ cubic polynomial segments, enforcing position, ve
 
 ### What Differential Flatness is
 
-A quadrotor is an **underactuated system** (12 states `[x,y,z,ẋ,ẏ,ż,φ,θ,ψ,p,q,r]` with only 4 motor inputs). Mellinger-Kumar (2011) proved that a quadrotor is a **differentially flat system**: there exist 4 flat outputs $\sigma = [x, y, z, \psi]$ (3D position + yaw) such that all 12 states and 4 control inputs can be **purely algebraically derived from $\sigma$ and its finitely-many derivatives**.
+A quadrotor is an **underactuated system** (12 states `[x,y,z,ẋ,ẏ,ż,φ,θ,ψ,p,q,r]` with only 4 motor inputs; here $\psi$ is the yaw of the Euler RPY parameterization). Mellinger-Kumar (2011) proved that a quadrotor is a **differentially flat system**: there exist 4 flat outputs $\sigma = [x, y, z, \psi]$ (3D position + **yaw — the same $\psi$ as in the state vector**; roll $\phi$ and pitch $\theta$ do not appear in the flat outputs because they can be recovered algebraically from the second derivatives of the position trajectory). All 12 states and 4 control inputs can then be **purely algebraically derived from $\sigma$ and its finitely-many derivatives**.
 
 ### Why this is a dimensional-reduction hammer
 
@@ -641,6 +641,14 @@ $$
 $$
 V_{xx} = Q_{xx} + K^\top Q_{uu} K + K^\top Q_{ux} + Q_{ux}^\top K
 $$
+
+**After substituting $k = -Q_{uu}^{-1} Q_u$ and $K = -Q_{uu}^{-1} Q_{ux}$**, these simplify to the standard form most implementations use directly:
+
+$$
+V_x = Q_x - Q_{ux}^\top Q_{uu}^{-1} Q_u = Q_x + K^\top Q_u, \qquad V_{xx} = Q_{xx} - Q_{ux}^\top Q_{uu}^{-1} Q_{ux} = Q_{xx} + K^\top Q_{ux}
+$$
+
+The four-term expanded form above is algebraically correct but its inter-term sign relationships rely on the negative signs in the definitions of $k, K$; reading the expansion without substituting in $k, K$ makes it easy to get wrong.
 
 ### Regularization to keep $Q_{uu}$ positive definite
 

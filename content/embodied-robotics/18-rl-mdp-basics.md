@@ -218,6 +218,9 @@ for episode in range(10000):
         next_state, reward, terminated, truncated, _ = env.step(action)
         done = terminated or truncated
         # Q-Learning 核心更新
+        # 注意（Gymnasium API）：bootstrap mask 只用 `terminated`（真正吸收態，V(s')=0），
+        # 不可用 `truncated`。time-limit 截斷（如 CartPole 500 步上限）時 MDP 仍在繼續，
+        # 要用 V(s') 繼續 bootstrap；否則會系統性低估靠近截斷處的狀態值。
         td_target = reward + gamma * np.max(Q[next_state]) * (not terminated)
         Q[state, action] += alpha * (td_target - Q[state, action])
         state = next_state
@@ -260,6 +263,7 @@ def train_q_learning(env_name="FrozenLake-v1", episodes=10000,
             done = terminated or truncated
 
             # Q-Learning update
+            # bootstrap mask 只用 `terminated`，不用 `truncated`（time-limit 截斷時 MDP 仍在繼續）
             td_error = reward + gamma * np.max(Q[next_state]) * (not terminated) - Q[state, action]
             Q[state, action] += alpha * td_error
 
@@ -302,6 +306,7 @@ def train_sarsa(env_name="CliffWalking-v0", episodes=5000,
             next_action = eps_greedy(next_state)
 
             # SARSA update: 用 Q(s', a') 而非 max Q(s', ·)
+            # bootstrap mask 只用 `terminated`，不用 `truncated`（time-limit 截斷時 MDP 仍在繼續）
             td_error = reward + gamma * Q[next_state, next_action] * (not terminated) - Q[state, action]
             Q[state, action] += alpha * td_error
 
@@ -441,7 +446,7 @@ def train_dqn(env_name="CartPole-v1", episodes=1000, batch_size=64,
 
 4. **「Q-Learning 永遠比 SARSA 好」** — Q-Learning 學最優策略（$\max$），SARSA 學當前策略的 Q 值。在有安全約束的場景（懸崖、碰撞），SARSA 因為考慮了探索行為的風險，會學出更保守更安全的路徑。**經典例子**：CliffWalking 環境中 SARSA 遠離懸崖走安全路線、Q-Learning 貼著懸崖走最短路。
 
-5. **「$\gamma = 1$ 就能看到最遠的未來」** — $\gamma = 1$ 會讓 return 變成無窮級數、不一定收斂，value function 可能發散到無窮大。**安全範圍**：$\gamma \in [0.95, 0.99]$。$\gamma = 0.99$ 的有效視野約 100 步（$0.99^{100} \approx 0.37$）。
+5. **「$\gamma = 1$ 就能看到最遠的未來」** — $\gamma = 1$ 會讓 return 變成無窮級數、不一定收斂，value function 可能發散到無窮大。**安全範圍**：$\gamma \in [0.95, 0.99]$。$\gamma = 0.99$ 的**有效視野**標準定義是 $1/(1-\gamma) = 100$ 步；另一常用啟發式是「折扣衰減到 $1/e$（$\approx 37\%$）的步數」，$\gamma = 0.99$ 恰好也約 100 步（$0.99^{100} \approx 0.37$）。兩者都定義合理，但別混用。
 
 ## 練習題
 

@@ -64,7 +64,7 @@ U_{\text{att}} = \tfrac{1}{2} k \|q - q_{\text{goal}}\|^2, \qquad
 U_{\text{rep}} = \tfrac{1}{2} \eta \left(\tfrac{1}{\rho} - \tfrac{1}{\rho_0}\right)^2 \;\; (\rho < \rho_0)
 $$
 
-**Physical meaning**: attractive potential pulls toward goal (parabolic, grows with distance); repulsive potential only activates when distance $\rho < \rho_0$, exploding as you approach. **Disaster case**: robot squeezed between two symmetric obstacles → attractive gradient = repulsive gradient in opposite direction → **net force = zero, deadlock**. A classic interview trap.
+**Physical meaning**: attractive potential pulls toward goal (parabolic, grows with distance); repulsive potential only activates when distance $\rho < \rho_0$, exploding as you approach. **Disaster case**: any point where $-\nabla U_{\text{att}} + \sum -\nabla U_{\text{rep},i} = 0$ (or where the potential has a local minimum) deadlocks the robot — two symmetric obstacles is just one instance; **U-shaped corridors, narrow passages, and goals hidden behind concave walls** all trigger it. Classic interview trap.
 
 **③ Velocity Obstacle / ORCA Half-plane** (F2 gold standard):
 
@@ -72,7 +72,7 @@ $$
 VO_{A|B} = \{\mathbf{v}_A \mid \exists\, t > 0 : (\mathbf{v}_A - \mathbf{v}_B) \cdot t \in B \oplus (-A)\}
 $$
 
-**Physical meaning**: inflate obstacle $B$ via Minkowski sum with the robot shape; the cone of relative velocities from the origin is the set of velocities that collide. ORCA linearizes the collision cone into a **half-plane constraint** $(\mathbf{v}_A - (\mathbf{v}_A^{\text{opt}} + \mathbf{u}/2)) \cdot \mathbf{n} \geq 0$ — all linear → **LP solvable in $O(n)$**, milliseconds for thousands of AGVs.
+**Physical meaning**: inflate obstacle $B$ via Minkowski sum with the robot shape; the cone of relative velocities from the origin is the set of velocities that collide. ORCA linearizes the collision cone into a **half-plane constraint** $(\mathbf{v}_A - (\mathbf{v}_A^{\text{opt}} + \mathbf{u}/2)) \cdot \mathbf{n} \geq 0$, where $\mathbf{u}$ is the minimum vector pushing the relative velocity out of the VO boundary and $\mathbf{n}$ is the **unit vector of $\mathbf{u}$ (pointing outward from VO)** — the half-plane therefore points to the "collision-free" side. All constraints linear → **LP solvable in $O(n)$**, milliseconds for thousands of AGVs.
 
 **④ Chance-Constrained MPC 3σ Spatiotemporal Tube** (F3 modern answer):
 
@@ -88,7 +88,7 @@ $$
 \dot{h}(x, u) + \alpha(h(x)) \geq 0, \qquad h(x) \geq 0 \iff x \in \mathcal{C}
 $$
 
-**Physical meaning**: $h(x) \geq 0$ defines the safe set $\mathcal{C}$ (distance to obstacle); $\dot{h}$ is your approach speed toward the danger boundary; $\alpha(h(x))$ is the allowed max approach speed (proportional to distance from boundary). **Guarantee**: closer to the death-line $h=0$, the approach speed toward danger **decays geometrically to zero** → never cross. **CBF is a safety filter, not an active force**, so no APF-style local minima.
+**Physical meaning**: $h(x) \geq 0$ defines the safe set $\mathcal{C}$ (distance to obstacle). $-\dot{h}$ is the **actual** approach rate toward the danger boundary; the inequality $\dot h + \alpha(h) \geq 0$ rewrites as $-\dot h \leq \alpha(h)$, capping the actual approach rate at $\alpha(h(x))$ (the **allowed max approach rate**, decreasing linearly with $h$: the closer to the boundary, the smaller this cap). **Guarantee**: as $h \to 0$, the allowed max approach rate $\alpha(h) \to 0$, so motion toward danger **decays geometrically to zero** → never cross. **CBF is a safety filter, not an active force**, so no APF-style local minima.
 
 **⑥ CBF-QP Minimum Projection** (F4 implementation form — standard architecture for adding hard safety to RL):
 
@@ -221,7 +221,7 @@ Scenario: robot at corridor center, pillars on left and right, goal directly ahe
    $$
    (\mathbf{v}_A - (\mathbf{v}_A^{\text{opt}} + \mathbf{u}/2)) \cdot \mathbf{n} \geq 0
    $$
-   where $\mathbf{u}$ is the minimum perturbation vector pushing $\mathbf{v}_A - \mathbf{v}_B$ out of the cone and $\mathbf{n}$ is the perpendicular normal. **All linear → LP in $O(n)$**, milliseconds for 1000+ AGVs / drones.
+   where $\mathbf{u}$ is the minimum perturbation vector pushing $\mathbf{v}_A - \mathbf{v}_B$ out of the collision cone, and $\mathbf{n}$ is the **unit vector of $\mathbf{u}$ (pointing outward from VO)** so that the half-plane consistently points to the "collision-free" side — reversing $\mathbf{n}$ flips the inequality entirely. **All linear → LP in $O(n)$**, milliseconds for 1000+ AGVs / drones.
 
 **Freezing Robot Problem disaster (interview must-answer)**:
 - Sandwiched between two opposing pedestrians: left gives a "go right" half-plane, right gives a "go left" half-plane.
@@ -667,7 +667,7 @@ $$
 v_{\max} = \max\left(0, \frac{S_p - (S_B + S_R + S_C)}{T}\right)
 $$
 
-where $S_p$ is separation distance, $S_B, S_R, S_C$ are robot braking distance, reaction distance, and human intrusion distance.
+where $S_p$ is separation distance, $S_B, S_R, S_C$ are robot braking distance, reaction distance, and human intrusion distance, and $T$ is the robot's total **reaction + braking time**. **Note**: this is a simplified inverse — in practice, ISO/TS 15066 compares the protective separation $S_p(t_0) = S_H + S_R + S_S + C + Z_d + Z_r$ against a threshold rather than directly solving for $v_{\max}$.
 
 **Cartesian potential-field avoidance**:
 - Wrap manipulator links in **Capsules** (cylinder + two hemispheres — tighter than spheres, simpler than convex hulls)

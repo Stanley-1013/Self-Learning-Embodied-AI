@@ -19,7 +19,7 @@ sidebar_position: 1
 
 ### Stack vs Heap
 
-**Stack**: automatically allocated and deallocated by the compiler; lifetime ends when scope exits. **Zero runtime overhead**. Each thread gets ~1 MB; 4096 threads exhaust a 32-bit 4 GB address space.
+**Stack**: automatically allocated and deallocated by the compiler; lifetime ends when scope exits. **Zero runtime overhead**. Each thread has its own stack; default size is platform-dependent: **Linux 8 MB, Windows 1 MB** (tunable via `pthread_attr_setstacksize`). On a 32-bit process the kernel already reserves 1–2 GB, so lots of threads exhaust usable VA long before the raw 4 GB limit.
 
 **Heap**: dynamically requested via `new`/`malloc`. Calling the memory manager can cost **thousands of memory-access instructions**, involving system calls, lock contention, and fragmentation merging.
 
@@ -32,18 +32,18 @@ Binds resource management to an object's lexical scope: **acquire in constructor
 | Pointer | Ownership | Cost |
 |---------|-----------|------|
 | `unique_ptr` | Exclusive; transfer via `move` only | **Zero cost** (identical to raw pointer at `-O2`) |
-| `shared_ptr` | Shared; reference-counted | Expensive (atomic inc/dec + full memory barrier) |
+| `shared_ptr` | Shared; reference-counted | Expensive (atomic increment is `relaxed`; decrement is `acq_rel`, and only the one that drops the count to zero needs a barrier to synchronize the destructor) |
 | `weak_ptr` | Observe without owning; breaks cycles | `lock()` does an atomic strong-count bump |
 
 `make_shared` beats `new`: single allocation for both object and control block (one fewer heap hit, contiguous memory).
 
 ### Memory Pool / Arena Allocator
 
-Pre-allocate a large block, slice into fixed-size chunks; allocate/free via free-list pop/push — **O(1), zero fragmentation, no locking**. Benchmark: 1 M instances — pool **4 ms** vs `malloc` **64 ms** (**15× faster**).
+Pre-allocate a large block, slice into fixed-size chunks; allocate/free via free-list pop/push — **O(1), zero fragmentation, no locking**. Benchmark: 1 M instances — pool **4 ms** vs `malloc` **64 ms** (**16× faster**).
 
 ### Cache Lines and False Sharing
 
-CPU caches operate in **32- or 64-byte cache lines**. When multiple threads modify different variables that share the same line → cache-line ownership ping-pongs across cores → **performance cliff**. Fix with `alignas(64)` or C++17 `std::hardware_destructive_interference_size`.
+CPU caches operate in cache lines; **every mainstream modern architecture uses 64 bytes** (x86-64, ARMv8 Cortex-A / Neoverse, Apple M-series; POWER uses 128 bytes). When multiple threads modify different variables that share the same line → cache-line ownership ping-pongs across cores → **performance cliff**. Fix with `alignas(64)` or C++17 `std::hardware_destructive_interference_size`.
 
 **Position in the Sense → Plan → Control Loop**:
 - **Not one node — the foundation under all nodes**
@@ -191,13 +191,13 @@ void control_callback() {
 
 ## Common Misconceptions
 
-1. **Thinking `shared_ptr` is free** — every copy triggers an atomic increment (full memory barrier); under multi-thread contention, the cost is significant. **Avoid**: pass `const T&` or `.get()` for read-only access; never pass `shared_ptr` by value unless you need to share ownership.
+1. **Thinking `shared_ptr` is free** — every copy triggers an atomic increment (relaxed, but still an atomic instruction); multi-thread contention on the same `shared_ptr` amplifies the cost. **Avoid**: pass `const T&` or `.get()` for read-only access; never pass `shared_ptr` by value unless you need to share ownership.
 
 2. **Using `vector::push_back` in a real-time callback** — when `size == capacity`, it triggers realloc: allocate double the memory, copy everything, invalidate all iterators. **Avoid**: `reserve(N)` at init, or use `std::array`.
 
 3. **Assuming false sharing only matters in HPC** — multi-core robot systems are just as vulnerable. Packing per-thread counters into the same struct → cache ping-pong. **Avoid**: `alignas(64)` to separate.
 
-4. **Treating `std::string` as lightweight** — SSO (Small String Optimization) only covers short strings (typically < 22 bytes); anything longer hits the heap. Repeated concatenation in a loop can be **170× slower**. **Avoid**: declare outside the loop + `clear()` to reuse the buffer, or `reserve()`.
+4. **Treating `std::string` as lightweight** — SSO (Small String Optimization) only covers short strings, **and the threshold is implementation-defined (libstdc++/MSVC: 15 bytes; libc++: 22 bytes)**; anything longer hits the heap. Repeated concatenation in a loop can be **170× slower**. **Avoid**: declare outside the loop + `clear()` to reuse the buffer, or `reserve()`.
 
 ## Situational Questions
 

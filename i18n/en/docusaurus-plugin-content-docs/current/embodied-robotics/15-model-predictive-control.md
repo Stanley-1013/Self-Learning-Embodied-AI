@@ -85,6 +85,8 @@ $$
 
 **Physical meaning**: $h(x) = $ signed distance to danger (distance to wall, to human, to joint limit). The CBF inequality says "as you approach the boundary, you **must** decelerate with rate $\alpha$" -- it defines a **forward-invariant set**: once inside the safe set, never leave. Plugged into MPC as a constraint, it gives the solver a non-negotiable "do not cross the boundary" tether that terminal constraints cannot give (terminal only guards the last step, the middle can crash).
 
+**Relative-degree caveat**: the first-order form above only works when $h$ has relative degree 1 (i.e. $\dot{h}$ contains $u$ directly). For position-level $h$ on second-order systems (acceleration-controlled manipulators, quadrotors), the first-order CBF constraint does **not** contain $u$ and is vacuous -- use **HOCBF** (Xiao & Belta 2019), which recursively applies class-$\mathcal{K}$ functions $\alpha_i$ to higher-order derivatives of $h$.
+
 **6. Chance constraint** (probabilistic safety for Stochastic MPC / GP-MPC):
 
 $$
@@ -104,10 +106,10 @@ $$
 **8. Offset-free disturbance augmentation** (industrial must-have):
 
 $$
-\begin{bmatrix} x_{k+1} \\ d_{k+1} \end{bmatrix} = \begin{bmatrix} A & B_d \\ 0 & I \end{bmatrix} \begin{bmatrix} x_k \\ d_k \end{bmatrix} + \begin{bmatrix} B \\ 0 \end{bmatrix} u_k, \quad y_k = C x_k + d_k
+\begin{bmatrix} x_{k+1} \\ d_{k+1} \end{bmatrix} = \begin{bmatrix} A & B_d \\ 0 & I \end{bmatrix} \begin{bmatrix} x_k \\ d_k \end{bmatrix} + \begin{bmatrix} B \\ 0 \end{bmatrix} u_k, \quad y_k = C x_k
 $$
 
-**Physical meaning**: introduce an "integrating disturbance" state $d_k$ that absorbs persistent model bias (gravity drift, wind, friction offset). A Kalman / Luenberger observer estimates $\hat{d}_k$ from residuals; MPC's target calculator uses $\hat{d}_k$ to **pre-compute feedforward** $u$ that exactly cancels the disturbance at steady state $\Rightarrow$ zero offset. Without this, nominal MPC has steady-state error just like a PD (no I) -- it's the "I-term" of MPC.
+**Physical meaning**: introduce an "integrating disturbance" state $d_k$ that absorbs persistent model bias (gravity drift, wind, friction offset). A Kalman / Luenberger observer estimates $\hat{d}_k$ from residuals; MPC's target calculator uses $\hat{d}_k$ to **pre-compute feedforward** $u$ that exactly cancels the disturbance at steady state $\Rightarrow$ zero offset. Without this, nominal MPC has steady-state error just like a PD (no I) -- it's the "I-term" of MPC. This is the **state-disturbance** canonical form; the equivalent **output-disturbance** form is $x_{k+1} = Ax_k + Bu_k, \; y_k = Cx_k + d_k$. Pick one — **do not mix $B_d d_k$ into $x$ and $d_k$ into $y$ simultaneously** (over-parameterized and typically unobservable).
 
 **9. Lie Group error** (for SO(3) / SE(3) states):
 

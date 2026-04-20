@@ -29,7 +29,7 @@ sidebar_position: 22
 
 5. **Grounding Problem**：LLM 從文字學到的「物理知識」是統計相關性，不是真正的物理理解。它知道「杯子裝水」，但不知道翻轉杯子水會灑出來的力學原因。在機器人場景，grounding 失敗 = 幻覺 — LLM 自信地生成物理上不可行的計劃（「穿過牆壁」、「用無限長手臂」）。語言幻覺只是講錯話，物理幻覺會撞壞機器人或傷人。
 
-6. **Action Tokenization**：把連續的機器人動作（7-DoF 末端位姿）離散化為 token，讓 Transformer 用自迴歸方式預測動作序列 — 和預測下一個文字 token 完全相同的架構。RT-2 用 256 bins 離散化每個維度。trade-off：bins 太少 → 精度差，bins 太多 → vocabulary 爆炸。
+6. **Action Tokenization**：把連續的機器人動作（7-DoF 末端位姿）離散化為 token，讓 Transformer 用自迴歸方式預測動作序列 — 和預測下一個文字 token 完全相同的架構。RT-2 每維用 256 bins 離散化，並**重用 VLM vocabulary 中使用頻率最低的 256 個 token 作為 action token**（不新增 token、直接復用 Transformer head）— 這是 VLA 能無縫吃 VLM 預訓練權重的關鍵 trick。trade-off：bins 太少 → 精度差，bins 太多 → vocabulary 爆炸。
 
 ### 閉環定位
 
@@ -93,13 +93,14 @@ $$
 
 **物理意義**：把動作空間第 $d$ 維的連續值均勻切成 $N_{\text{bins}}$ 個 bin。RT-2 用 256 bins → 每維精度約 $(a_{max} - a_{min})/256$。7-DoF 動作 = 7 個 token → 可以和語言 token 串在一起做自迴歸預測。
 
-6. **VLA Scaling 的經驗法則**：
+6. **VLA Scaling 的經驗觀察（非正式法則）**：
 
-$$
-\text{Success Rate} \propto \log(\text{model size}) \cdot \sqrt{\text{data size}}
-$$
+RT-2 / OpenVLA 等論文的實驗顯示兩條定性趨勢，**但目前沒有已驗證的閉式 scaling law**（不像 LLM 有 Kaplan/Chinchilla 那種曲線擬合）：
 
-**物理意義**：Google RT-2 的實驗顯示，模型從 5B → 55B 參數，zero-shot 泛化提升約 3x。但數據是更大的瓶頸 — 全世界機器人操作數據 <1M episodes，而 LLM 訓練用了 13T tokens。數據獲取速度（真機操作）是線性的，無法像文本一樣從網路爬。
+- **模型 scaling**：同系列下更大的 VLM backbone（例如 RT-2-PaLI-X 55B vs 較小模型）在 unseen 物體 / 指令上的 emergent 能力明顯提升，但論文只給離散比較點，不是連續曲線
+- **數據 scaling**：從數萬到 ~130K episodes，in-distribution 任務成功率顯著上升；但泛化能力更多來自 VLM backbone 的網路規模預訓練，而非機器人資料本身
+
+**工程直覺**：機器人資料獲取速度是線性的（每台機器人每天約 100–200 個 episodes），而 LLM 能從網路無限爬文字。這個資料稀缺性是 VLA 的結構性瓶頸，不是靠堆更大模型能解的。
 
 <details>
 <summary>深入：VLA 訓練數據瓶頸與 Scaling — 為什麼數據比模型更關鍵</summary>
@@ -115,11 +116,11 @@ $$
 
 差距 3-4 個數量級。這就是為什麼 VLA 必須從預訓練 VLM 做 fine-tune，而不能從頭訓練。
 
-### RT-2 的 Scaling 實驗
+### RT-2 / OpenVLA 的 scaling 觀察
 
-- 模型 5B → 55B 參數：zero-shot 新物體泛化提升 ~3x
-- 數據 10K → 130K episodes：成功率 40% → 75%
-- 但數據獲取速度是線性的 — 每台機器人每天約收集 100-200 個 episode
+- **模型 scaling**：RT-2 論文比較了不同規模的 VLM backbone（PaLM-E 12B、PaLI-X 5B、PaLI-X 55B 等），更大的模型在 emergent / unseen 任務上明顯更好。但原文用的是個別任務的絕對百分比（例如某類 unseen 物體 +20–30 個百分點），**不是一個乾淨的「3×」倍率**，也不是連續 scaling 曲線
+- **資料 scaling**：從數萬到 ~130K 真機 episodes，in-distribution 任務成功率明顯上升；但 unseen 的泛化能力主要來自 VLM 預訓練的語義知識，而非多收機器人資料
+- **資料獲取速度的結構性瓶頸**：每台機器人每天約收集 100–200 episodes，線性成長；Open X-Embodiment 靠 22 個機構聯合才湊到 ~1M — 這個量級在 LLM 眼裡仍是極小
 
 ### 數據效率的四條路
 
@@ -429,7 +430,7 @@ class HierarchicalAgent:
 - **Brohan et al.,《RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control》(2023)** — VLA 里程碑，證明 VLM fine-tune 成 action predictor 可行，55B 模型 zero-shot 泛化驚人
 - **Ahn et al.,《Do As I Can, Not As I Say: Grounding Language in Robotic Affordances (SayCan)》(2022)** — LLM + affordance grounding 經典架構，解決 LLM 規劃不可行的核心問題
 - **Octo (UC Berkeley, 2024)** — 開源 VLA 模型，支援 fine-tune，學 VLA 工程的最佳起手式
-- **OpenVLA (Stanford, 2024)** — 基於 Llama 的開源 VLA，7B 參數，展示用開源 LLM 做 VLA 的可行性
+- **OpenVLA (Stanford + UC Berkeley + TRI + MIT + Google DeepMind, 2024)** — Kim et al. 領銜的多機構協作，基於 Llama 2 7B 的開源 VLA，展示用開源 LLM 做 VLA 的可行性
 - **Hafner et al.,《DreamerV3》(2023)** — World model SOTA，latent space model-based RL，sim 和 real 上均有展示
 - **Liang et al.,《Code as Policies》(2023)** — LLM 生成 Python 程式碼作為機器人策略，靈活但需嚴格 sandbox
 - **Open X-Embodiment Collaboration (2024)** — 22 機構聯合數據集，證明 cross-embodiment transfer 可行，VLA scaling 基礎

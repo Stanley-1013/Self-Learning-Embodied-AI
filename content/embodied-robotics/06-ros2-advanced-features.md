@@ -27,8 +27,7 @@ sidebar_position: 6
 |------|------|----------|
 | **Reliability** | `RELIABLE` / `BEST_EFFORT` | 掉包要不要重傳 |
 | **Durability** | `VOLATILE` / `TRANSIENT_LOCAL` | 新 Subscriber 能不能收到歷史訊息 |
-| **History** | `KEEP_LAST(N)` / `KEEP_ALL` | 佇列保留多少筆 |
-| **Depth** | 整數 | 搭配 `KEEP_LAST` 的佇列深度 |
+| **History** | `KEEP_LAST(N)` / `KEEP_ALL` | 佇列保留策略（DDS 只有這兩種策略；N 是 `KEEP_LAST` 的深度參數，不是獨立 policy） |
 | **Deadline** | 時間 | 多久內必須收到下一筆，超時觸發事件 |
 | **Liveliness** | `AUTOMATIC` / `MANUAL_BY_TOPIC` | Publisher 是否還活著的偵測方式 |
 | **Lifespan** | 時間 | 訊息過期時間，過了就丟棄 |
@@ -48,7 +47,7 @@ $$
 | `SensorDataQoS` | Best-effort | Volatile | Keep last 5 | LiDAR、Camera — 掉幀沒關係，要最新的 |
 | `SystemDefaultsQoS` | Reliable | Volatile | Keep last 10 | 一般 topic |
 | `ServicesQoS` | Reliable | Volatile | Keep last 10 | Service call |
-| `ParameterEventsQoS` | Reliable | Transient local | Keep last 1000 | 參數變更通知 |
+| `ParameterEventsQoS` | Reliable | Volatile | Keep last 1000 | 參數變更通知（rclcpp 預設） |
 
 ### Executor（執行器）
 
@@ -101,7 +100,7 @@ $$
 1. Publisher 和 Subscriber 各自向 DDS 註冊自己的 QoS profile
 2. DDS Discovery Protocol 發現對方後，比對 QoS 相容性
 3. **全部策略都相容** → 建立通訊管道
-4. **任一策略不相容** → 靜默拒絕，觸發 `IncompatibleQosEvent`（但預設沒人監聽）
+4. **任一策略不相容** → 靜默拒絕，觸發 `RequestedIncompatibleQoSEvent`（Subscriber 端）或 `OfferedIncompatibleQoSEvent`（Publisher 端）— 但預設沒人註冊 callback
 5. 診斷指令：`ros2 topic info /scan -v` 可看到 Publisher 與 Subscriber 各自的 QoS profile
 
 ### Deadline 與 Liveliness 的即時應用

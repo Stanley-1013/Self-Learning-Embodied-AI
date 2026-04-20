@@ -83,7 +83,7 @@ $$
 - 12 關節角度 + 速度：24 DoF
 - 合計 **30 維狀態 + 12 維控制**，預測時域 20 步 → 每步 NLP 有 840 變數
 
-NMPC 每個 SQP 迭代需算 Jacobian（$O(n^4)$）、Hessian、KKT 系統。在嵌入式 CPU 上拿完整動力學去解 → 單迭代就超 100 ms → 即時控制迴路崩潰。
+NMPC 每個 SQP 迭代需算 KKT 因式分解（$O(n^3)$）+ Hessian/Jacobian 裝配（由 RNEA/CRBA 的關節體動力學主導，$O(n^2) \sim O(n^3)$）。在嵌入式 CPU 上拿完整動力學去解 → 單迭代就超 100 ms → 即時控制迴路崩潰。
 
 ### 解法：SRBD 降階（Single Rigid Body Dynamics）
 
@@ -243,6 +243,8 @@ $$
 **物理意義**：$h$ 是「距離危險的餘裕」；$\dot{h} \ge -\alpha h$ 等於說「越靠近邊界 ($h$ 小) 就越強制遠離 ($\dot{h}$ 必為正）」。求解器戴上「絕不越界」的緊箍咒。
 
 **CBF 嵌入 MPC**：把 $\dot{h} + \alpha h \ge 0$ 作為每個預測時間步的約束 → Safety-Critical MPC。
+
+**注意（Relative Degree）**：上式僅在 $h$ 相對階 = 1 時有效（$\dot{h}$ 直接含 $u$）。若 $h$ 相對階 > 1（例：位置約束 + 加速度控制輸入的機械臂／四旋翼），首階 CBF 不含 $u$ → 約束失效 → 需用 **HOCBF（Xiao & Belta 2019）** 對更高階導數遞迴套 $\alpha$ 函數。
 
 **協作機械臂應用**：人突然闖入工作區 → 即使 MPC 想抄捷徑（cost 最低但要穿越人的位置），CBF 在邊界強制排斥速度 → 自動煞車。
 
@@ -496,10 +498,10 @@ SE3d X_next = X_current + SE3Tangentd(delta_u * dt);  // 內部 exp map
 **Disturbance Model Augmentation**：
 
 $$
-x_{k+1} = A x_k + B u_k + B_d d_k, \quad d_{k+1} = d_k, \quad y_k = C x_k + d_k
+x_{k+1} = A x_k + B u_k + B_d d_k, \quad d_{k+1} = d_k, \quad y_k = C x_k
 $$
 
-**物理意義**：把「未建模的恆定擾動」當新狀態 $d$，用 Kalman / Luenberger Observer 從殘差估計 $d_k$，MPC 在預測中前饋抵消 → **Offset-free**。
+**物理意義**：把「未建模的恆定擾動」當新狀態 $d$（狀態擾動模型），用 Kalman / Luenberger Observer 從殘差估計 $d_k$，MPC 在預測中前饋抵消 → **Offset-free**。等價的輸出擾動模型是 $x_{k+1} = Ax_k + Bu_k, \; y_k = Cx_k + d_k$ — 兩者擇一即可，**不要同時放 $B_d d_k$ 與 $y = Cx + d$**（會過參數化、通常不可觀測）。
 
 **Velocity Form MPC（增量式）**：不優化絕對 $u_k$，優化 $\Delta u_k$；內部自然形成積分器 $u_k = \sum \Delta u$。
 

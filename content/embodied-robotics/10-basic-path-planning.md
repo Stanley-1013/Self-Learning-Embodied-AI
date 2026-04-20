@@ -166,9 +166,9 @@ $$
 - 動力學慣性限制
 - 硬追折線 → 控制器輸出飽和 → 軌跡嚴重偏離甚至翻車
 
-**Dubins Car**（只能前進，最小轉彎半徑）：最優路徑必為 **CCC（圓弧-圓弧-圓弧）或 CSC（圓弧-直線-圓弧）**，共 6 種組合。
+**Dubins Car**（只能前進，最小轉彎半徑）：最優路徑必落在 6 種字碼之一 $\{LSL, RSR, LSR, RSL, LRL, RLR\}$ — 前 4 條是 **CSC** 型（圓弧-直線-圓弧），後 2 條是 **CCC** 型（圓弧-圓弧-圓弧，僅在起終點距離短於特定門檻時會勝出）。
 
-**Reeds-Shepp Car**（允許倒車）：**46 種字碼**（如 `C|C|C`，`|` 代表換檔方向切換）。
+**Reeds-Shepp Car**（允許倒車）：原 paper（Reeds & Shepp 1990）列 48 candidate words，其中 46 種 distinct pattern（學界兩種引法都常見）；`|` 代表換檔方向切換（例如 `C|C|C`）。
 
 **Kinodynamic RRT**（核心物理直覺）：不是連直線！在 $x_{\text{near}}$ 處隨機採樣**控制輸入** $u$（方向盤轉角、油門），丟進動力學微分方程做 **Forward Integration (RK4)** 一小段 $dt$，積分終點才是 $x_{\text{new}}$。**保證每條分支在物理上 100% 可執行**。
 
@@ -319,9 +319,11 @@ while OPEN 非空:
 
 **常見啟發函數**（2D grid）：
 - **Manhattan distance**：4-connected grid 的 admissible $h$，$h = |x_1 - x_2| + |y_1 - y_2|$
-- **Chebyshev distance**：8-connected grid，斜向與直向同代價，$h = \max(|dx|, |dy|)$
+- **Chebyshev distance**：8-connected grid，**僅在斜向代價 = 直向代價 = 1 時** admissible，$h = \max(|dx|, |dy|)$；若採物理真實的 $\sqrt{2}$ 斜向代價會**低估**真實距離，必須改用 Octile（下條）
 - **Euclidean distance**：永遠 admissible 但可能不夠 tight，$h = \sqrt{dx^2 + dy^2}$
-- **Diagonal distance**：8-connected grid，斜向代價 $\sqrt{2}$：$h = \max(|dx|, |dy|) + (\sqrt{2} - 1) \min(|dx|, |dy|)$
+- **Octile / Diagonal distance**：8-connected grid 搭配 $\sqrt{2}$ 斜向代價時的正確選擇，通式 $h = D \cdot \max(|dx|,|dy|) + (D' - D) \cdot \min(|dx|,|dy|)$（取 $D=1$、$D'=\sqrt{2}$）：$h = \max(|dx|, |dy|) + (\sqrt{2} - 1) \min(|dx|, |dy|)$
+
+**選擇規則**：斜向代價 = 1 → Chebyshev；斜向代價 = $\sqrt{2}$（Nav2 預設）→ Octile；需要與連續空間一致的下界 → Euclidean。
 
 **Weighted A***：$f = g + w \cdot h$，$w > 1$ 時犧牲最優性換速度，解品質在最優解的 $w$ 倍以內（$w$-admissible）。**實務上加速 10-100×**，Nav2 的 `NavFn` planner 用的就是 weighted A*。
 
@@ -937,7 +939,7 @@ def hybrid_a_star_expand(node, dt=0.3, v=1.0, L=2.5):
    - 檢查 `cost_scaling_factor` — 太小會讓遠離障礙物的地方也高 cost
 
 3. **解法**：**Global Costmap 引入平滑代價衰減梯度 (Cost Decay)**
-   - 公式：$\text{Cost}(d) = 252 \cdot \exp(-\alpha \cdot (d - r_{\text{inscribed}}))$
+   - 公式（Nav2 `InflationLayer`）：$\text{Cost}(d) = (\text{LETHAL\_OBSTACLE} - 1) \cdot \exp(-\alpha \cdot (d - r_{\text{inscribed}})) = 253 \cdot \exp(-\alpha \cdot (d - r_{\text{inscribed}}))$，僅在 $r_{\text{inscribed}} < d \leq r_{\text{inflation}}$ 區間有效；$d \leq r_{\text{inscribed}}$ 直接設為 254（`LETHAL_OBSTACLE`）
    - $d$ 接近障礙 → 代價指數飆升 → 引導 A* 走通道中央
    - 典型值：`cost_scaling_factor: 3.0`, `inflation_radius: 0.55`（機器人半徑 0.22m 時）
 

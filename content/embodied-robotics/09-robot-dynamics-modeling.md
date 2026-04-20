@@ -114,6 +114,8 @@ $$
 
 **Forward pass**（從 base → end-effector，$i = 1 \ldots n$）：
 
+> 向量 convention：以下所有向量均表達在 **frame $i$** 下；$\hat{z} = [0,0,1]^T$ 代表 joint $i$ 在其自身 frame 的旋轉軸；$R_i$ 是 frame $i-1 \to i$ 的旋轉矩陣；$r_i$ 是 frame $i-1$ 原點指向 frame $i$ 原點的向量（表達在 frame $i$）。重力透過 base pseudo-acceleration $\ddot p_0 = -g$ 注入，後續公式不再顯式列重力項。
+
 $$
 \omega_i = R_i^T (\omega_{i-1} + \dot{q}_i \hat{z})
 $$
@@ -228,7 +230,7 @@ $$
 A(q)\dot{q} = \begin{bmatrix}l \\ k\end{bmatrix}
 $$
 
-$l$ = 線動量、$k$ = 角動量。$A(q)$ 把關節速度映射到質心動量，是 WBC 高層規劃的核心。Pinocchio API：`pinocchio::ccrba(model, data, q, v)` → `data.Ag, data.hg`。
+$l$ = 線動量、$k$ = 角動量。$A(q)$ 把關節速度映射到質心動量，是 WBC 高層規劃的核心。Pinocchio API：`pinocchio::ccrba(model, data, q, v)` → `data.Ag, data.hg`。**Convention 提示**：本文採 Pinocchio 排列（上 3 維 linear、下 3 維 angular，對應 `hg = [l; k]`）；Orin & Goswami 2008 原文採相反排序 $[k; l]$，跨 paper 抄公式時務必先檢查 convention，否則 index 容易錯位。
 
 <details>
 <summary>深入：Contact Wrench Cone (CWC) 與 Multi-contact QP — 為什麼淘汰了 ZMP</summary>
@@ -466,7 +468,7 @@ $$
 **Step 7：物理一致性校驗（LMI/SDP）**
 - 這一步是學術和工業的分水嶺
 - 純 WLS 可能解出**負質量、非正定慣性張量**（數學上最優，物理上不合法）
-- 用 Linear Matrix Inequality 約束：$m_i > 0$，$I_i \succ 0$（正定），$\text{tr}(I_i) > \text{max eigval}$（三角不等式）
+- 用 Linear Matrix Inequality 約束：$m_i > 0$，$I_i \succ 0$（正定），並於 principal axes 下滿足**三角不等式** $I_{jj} + I_{kk} \geq I_{ii}$ 對所有 $\{i,j,k\}$ 的排列都成立（等價於 Souloumiac / Traversaro 的 pseudo-inertia matrix $\succeq 0$ 的 LMI 形式；註：$\text{tr}(I_i) > \lambda_{\max}$ 只是此條件的必要弱化，單獨使用會漏掉物理上不可實現的 inertia）
 - 套件：SciPy `cvxpy` + SDP solver (Mosek / SCS)
 
 **Step 8：交叉驗證**
@@ -502,7 +504,7 @@ $$
 
 $\Gamma$ 是正定自適應增益矩陣。
 
-**李雅普諾夫證明**：$V = \tfrac{1}{2}s^T M s + \tfrac{1}{2}\tilde{\pi}^T \Gamma^{-1} \tilde{\pi}$，求導用 $\dot{M} - 2C$ 斜對稱性抵消科氏項 → $\dot{V} = -s^T K s \leq 0$ → $e \to 0$（但不保證 $\hat{\pi} \to \pi$）。
+**李雅普諾夫證明**：$V = \tfrac{1}{2}s^T M s + \tfrac{1}{2}\tilde{\pi}^T \Gamma^{-1} \tilde{\pi}$，求導用 $\dot{M} - 2C$ 斜對稱性抵消科氏項 → $\dot{V} = -s^T K s \leq 0$。因 $V$ 有下界且 $\dot V \leq 0$，故 $s \in L^\infty \cap L^2$；再由 **Barbalat's Lemma**（$\dot V$ 均勻連續）推得 $s \to 0$，進而 $e \to 0$（但不保證 $\hat{\pi} \to \pi$）。
 
 **Persistent Excitation (PE) 死穴**：
 - $e \to 0$ 不等於參數估計收斂

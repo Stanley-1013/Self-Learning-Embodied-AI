@@ -258,7 +258,7 @@ def generate_launch_description():
 
 **Key points**:
 - `component_container_mt` uses `MultiThreadedExecutor` — necessary when SLAM and obstacle detection should run in parallel
-- `use_intra_process_comms: True` on every node enables zero-copy `unique_ptr` passing between them
+- `use_intra_process_comms: True` on every node enables zero-copy `unique_ptr` passing between them. For true intra-process zero-copy all three conditions must hold: (1) publisher node has `use_intra_process_comms(true)`, (2) subscriber node has `use_intra_process_comms(true)`, and (3) the publisher actually calls `publish(std::unique_ptr<Msg>)` — publishing a `shared_ptr` silently falls back to a copy
 - If you need 1-to-N sharing (Camera to both SLAM and obstacle detection), ROS 2 automatically upgrades to `const shared_ptr` — still zero-copy, just shared read-only access
 
 </details>

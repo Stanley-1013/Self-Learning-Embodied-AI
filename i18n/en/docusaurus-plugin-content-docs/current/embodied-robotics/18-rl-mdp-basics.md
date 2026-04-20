@@ -218,6 +218,10 @@ for episode in range(10000):
         next_state, reward, terminated, truncated, _ = env.step(action)
         done = terminated or truncated
         # Q-Learning core update
+        # Note (Gymnasium API): the bootstrap mask uses `terminated` only (a true absorbing
+        # state with V(s')=0) — NOT `truncated`. A time-limit cutoff (e.g. CartPole 500-step
+        # cap) means the underlying MDP continues, so you must still bootstrap with V(s');
+        # otherwise states near the cutoff get systematically undervalued.
         td_target = reward + gamma * np.max(Q[next_state]) * (not terminated)
         Q[state, action] += alpha * (td_target - Q[state, action])
         state = next_state
@@ -260,6 +264,7 @@ def train_q_learning(env_name="FrozenLake-v1", episodes=10000,
             done = terminated or truncated
 
             # Q-Learning update
+            # Bootstrap mask uses `terminated` only, NOT `truncated` (time-limit cutoff means the MDP continues)
             td_error = reward + gamma * np.max(Q[next_state]) * (not terminated) - Q[state, action]
             Q[state, action] += alpha * td_error
 
@@ -302,6 +307,7 @@ def train_sarsa(env_name="CliffWalking-v0", episodes=5000,
             next_action = eps_greedy(next_state)
 
             # SARSA update: uses Q(s', a') instead of max Q(s', ·)
+            # Bootstrap mask uses `terminated` only, NOT `truncated` (time-limit cutoff means the MDP continues)
             td_error = reward + gamma * Q[next_state, next_action] * (not terminated) - Q[state, action]
             Q[state, action] += alpha * td_error
 
@@ -441,7 +447,7 @@ def train_dqn(env_name="CartPole-v1", episodes=1000, batch_size=64,
 
 4. **"Q-Learning is always better than SARSA"** — Q-Learning learns the optimal policy ($\max$); SARSA learns the Q values of the current policy. In safety-critical settings (cliffs, collisions), SARSA factors in the risk of exploratory mistakes and learns more conservative, safer paths. **Classic example**: in CliffWalking, SARSA steers clear of the cliff while Q-Learning walks along the edge.
 
-5. **"$\gamma = 1$ gives the longest planning horizon"** — with $\gamma = 1$ the return becomes an infinite series that may not converge, and the value function can diverge. **Safe range**: $\gamma \in [0.95, 0.99]$. At $\gamma = 0.99$ the effective horizon is about 100 steps ($0.99^{100} \approx 0.37$).
+5. **"$\gamma = 1$ gives the longest planning horizon"** — with $\gamma = 1$ the return becomes an infinite series that may not converge, and the value function can diverge. **Safe range**: $\gamma \in [0.95, 0.99]$. The standard definition of **effective horizon** is $1/(1-\gamma) = 100$ steps for $\gamma = 0.99$; a separate heuristic is "the step count at which the discount factor drops to $1/e \approx 37\%$", which also lands near 100 for $\gamma = 0.99$ ($0.99^{100} \approx 0.37$). Both definitions are defensible — just don't conflate them.
 
 ## Situational Questions
 

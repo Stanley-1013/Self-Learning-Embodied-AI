@@ -171,12 +171,12 @@ public:
     cv_.wait(lk, [&]{ return !queue_.empty(); });
     auto result = std::make_shared<T>(std::move(queue_.front()));
     queue_.pop();
-    return result;  // 回傳 shared_ptr 避免 pop 後物件消失的 race
+    return result;  // 回傳 shared_ptr：合併 front+pop 為單步，並提供強異常安全
   }
 };
 ```
 
-**設計要點**：`wait_and_pop` 回傳 `shared_ptr<T>` 而非讓呼叫者先 `front()` 再 `pop()` — 兩步操作之間可能被其他 thread 搶先。用 dummy node 技巧可進一步分離 head/tail 鎖，提升並發度。
+**設計要點**：真正要避免的 race 是「呼叫者先 `front()` 再 `pop()`」這兩步之間被其他 thread 搶先。把兩步放在同一個鎖下、並把結果包成 `shared_ptr` 回傳 — 也順便提供強異常安全保證（複製/移動出 queue 之後才改動 queue 狀態）。用 dummy node 技巧可進一步分離 head/tail 鎖，提升並發度。
 
 </details>
 
@@ -348,7 +348,7 @@ void planning_loop(DoubleBuffer<OccupancyGrid>& db) {
 
 4. **以為 `std::async` 一定開新 thread** — 預設 launch policy 包含 `deferred`，可能在 `future.get()` 時同步執行。**避開**：需要並行時顯式寫 `std::async(std::launch::async, ...)`。
 
-5. **即時 callback 裡用 mutex** — 高優先級控制 thread 等低優先級 thread 釋放 mutex → **priority inversion**。Linux 預設 mutex 不支援 priority inheritance。**避開**：硬即時路徑用 lock-free queue 或 atomic pointer swap。
+5. **即時 callback 裡用 mutex** — 高優先級控制 thread 等低優先級 thread 釋放 mutex → **priority inversion**。Linux pthread mutex 預設**不啟用** priority inheritance（但 `pthread_mutexattr_setprotocol(..., PTHREAD_PRIO_INHERIT)` 可開啟，PREEMPT_RT 常用此招）。**避開**：硬即時路徑用 lock-free queue 或 atomic pointer swap；若必須用 mutex 則啟用 `PTHREAD_PRIO_INHERIT`。
 
 ## 練習題
 
@@ -381,7 +381,7 @@ void planning_loop(DoubleBuffer<OccupancyGrid>& db) {
    - 或用 Helgrind（Valgrind 工具），不需重編但 20-50x 慢
 4. **修復**：
    - 統一鎖順序，或改用 `std::scoped_lock` 同時鎖多個 mutex（內部 try-and-back-off）
-   - 評估是否能用 `MutuallyExclusiveCallbackGroup` 完全消除手動 mutex
+   - 評估是否能把互斥的 callback 放進**同一個** `MutuallyExclusiveCallbackGroup` 來消除手動 mutex（注意：不同 ME group 之間的 callback 仍可能平行）
 5. **陷阱**：deadlock 可能需要幾小時特定的 callback 交錯順序才觸發 → 單元測試抓不到，需要長時間壓力測試
 
 **面試官想聽到**：診斷三步驟（gdb bt → TSan → 修復鎖順序），並知道 deadlock 可能需要長時間運行才會觸發。

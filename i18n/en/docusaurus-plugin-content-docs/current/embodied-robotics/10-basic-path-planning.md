@@ -166,9 +166,9 @@ $$
 - Dynamic inertia limits
 - Forcing polyline tracking → controller saturates → trajectory deviates or vehicle rolls over
 
-**Dubins Car** (forward-only, min turning radius): optimal paths are **CCC (arc-arc-arc) or CSC (arc-straight-arc)** — 6 combinations total.
+**Dubins Car** (forward-only, min turning radius): the optimal path is always one of the 6 words $\{LSL, RSR, LSR, RSL, LRL, RLR\}$ — the first four are **CSC** (arc-straight-arc) and the last two are **CCC** (arc-arc-arc, optimal only when start/goal are closer than a specific threshold).
 
-**Reeds-Shepp Car** (allows reverse): **46 word codes** (e.g. `C|C|C`, where `|` denotes gear change).
+**Reeds-Shepp Car** (allows reverse): the original paper (Reeds & Shepp 1990) lists 48 candidate words, of which 46 are distinct patterns (both counts appear in the literature); `|` denotes a gear change (e.g. `C|C|C`).
 
 **Kinodynamic RRT** (core physical intuition): don't connect straight lines! At $x_{\text{near}}$ randomly sample **control input** $u$ (steering angle, throttle), feed into dynamics ODE and **Forward Integrate (RK4)** for $dt$. The integration endpoint is $x_{\text{new}}$. **Every branch is physically 100% executable**.
 
@@ -319,9 +319,11 @@ while OPEN is not empty:
 
 **Common heuristics** (2D grid):
 - **Manhattan distance**: admissible for 4-connected grids, $h = |x_1 - x_2| + |y_1 - y_2|$
-- **Chebyshev distance**: 8-connected grids with equal diagonal/cardinal cost, $h = \max(|dx|, |dy|)$
+- **Chebyshev distance**: 8-connected grids, **admissible only when diagonal cost = cardinal cost = 1**, $h = \max(|dx|, |dy|)$; with the physically realistic $\sqrt{2}$ diagonal cost it **underestimates** the true distance — use Octile instead (next entry)
 - **Euclidean distance**: always admissible but possibly loose, $h = \sqrt{dx^2 + dy^2}$
-- **Diagonal distance**: 8-connected grid with $\sqrt{2}$ diagonal cost: $h = \max(|dx|, |dy|) + (\sqrt{2} - 1) \min(|dx|, |dy|)$
+- **Octile / Diagonal distance**: correct choice for 8-connected grid with $\sqrt{2}$ diagonal cost; general form $h = D \cdot \max(|dx|,|dy|) + (D' - D) \cdot \min(|dx|,|dy|)$ with $D=1$, $D'=\sqrt{2}$: $h = \max(|dx|, |dy|) + (\sqrt{2} - 1) \min(|dx|, |dy|)$
+
+**Selection rule**: diagonal cost = 1 → Chebyshev; diagonal cost = $\sqrt{2}$ (Nav2 default) → Octile; want a bound consistent with continuous space → Euclidean.
 
 **Weighted A\***: $f = g + w \cdot h$ with $w > 1$ trades optimality for speed; solution quality within $w \times$ optimal ($w$-admissible). **Production speedup 10-100×**. Nav2's NavFn planner is weighted A\*.
 
@@ -935,7 +937,7 @@ def hybrid_a_star_expand(node, dt=0.3, v=1.0, L=2.5):
    - Check `cost_scaling_factor` — too small means even far-from-obstacle areas have high cost
 
 3. **Fix**: **Introduce a smooth cost-decay gradient in the Global Costmap**
-   - Formula: $\text{Cost}(d) = 252 \cdot \exp(-\alpha \cdot (d - r_{\text{inscribed}}))$
+   - Formula (Nav2 `InflationLayer`): $\text{Cost}(d) = (\text{LETHAL\_OBSTACLE} - 1) \cdot \exp(-\alpha \cdot (d - r_{\text{inscribed}})) = 253 \cdot \exp(-\alpha \cdot (d - r_{\text{inscribed}}))$, valid only for $r_{\text{inscribed}} < d \leq r_{\text{inflation}}$; for $d \leq r_{\text{inscribed}}$ the cost is set directly to 254 (`LETHAL_OBSTACLE`)
    - Near obstacle → cost skyrockets → A\* routed through corridor center
    - Typical values: `cost_scaling_factor: 3.0`, `inflation_radius: 0.55` (for robot radius 0.22m)
 

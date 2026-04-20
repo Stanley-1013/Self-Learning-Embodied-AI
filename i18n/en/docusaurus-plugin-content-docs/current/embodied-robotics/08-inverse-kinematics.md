@@ -45,7 +45,7 @@ $$
 \dot{q} = J^+(q)\,\dot{x}
 $$
 
-where $J^+ = J^T(JJ^T)^{-1}$ for a full-rank, non-redundant manipulator. **Physical meaning**: among all joint velocities that achieve $\dot{x}$, the pseudoinverse picks the one with the smallest $\|\dot{q}\|$. This is the "laziest" solution — every motor does as little as possible.
+where $J^+ = J^T(JJ^T)^{-1}$ is the **right pseudo-inverse**, valid when $n \geq 6$ and $J$ has full row rank (the usual case for redundant or square manipulators). For the rare over-determined case (task dim > DoF), use the left pseudo-inverse $(J^T J)^{-1} J^T$ instead; the SVD form $J^+ = V \Sigma^+ U^T$ covers both. **Physical meaning**: among all joint velocities that achieve $\dot{x}$, the pseudoinverse picks the one with the smallest $\|\dot{q}\|$. This is the "laziest" solution — every motor does as little as possible.
 
 3. **Damped Least Squares (DLS)** (singularity-safe IK):
 
@@ -120,7 +120,7 @@ This keeps $\lambda = 0$ (full accuracy) when far from singularity, and smoothly
 
 **Singularity as a dead zone**: imagine trying to push a door open while standing directly behind the hinge line. No matter how hard you push, you generate zero torque on the door — your force direction is aligned with the hinge axis. That is exactly what happens at a kinematic singularity: the Jacobian loses rank, meaning the end-effector cannot move in some direction no matter how fast the joints spin. The motors try to compensate by spinning infinitely fast, which means infinite current draw and potential hardware damage.
 
-**Simulator observation**: in MuJoCo or Isaac Sim, command a 6-DoF arm to trace a straight line that passes through a wrist singularity (e.g., a fully extended UR5 with joints 4 and 6 aligned). Watch the joint velocity plot spike and the trajectory deviate wildly at the singular configuration. Then enable DLS with $\lambda = 0.05$ and re-run — the trajectory deviates by a few millimeters near the singularity but the joint velocities stay bounded. Plotting the Jacobian's condition number over time clearly shows the spike at the singular crossing.
+**Simulator observation**: in MuJoCo or Isaac Sim, command a 6-DoF arm to trace a straight line that passes through a wrist singularity (e.g., a UR5 driven to $\theta_5 = 0$ so that joints 4 and 6 become co-linear). Watch the joint velocity plot spike and the trajectory deviate wildly at the singular configuration. Then enable DLS with $\lambda = 0.05$ and re-run — the trajectory deviates by a few millimeters near the singularity but the joint velocities stay bounded. Plotting the Jacobian's condition number over time clearly shows the spike at the singular crossing.
 
 ## Implementation Link
 
@@ -339,7 +339,7 @@ if __name__ == "__main__":
 
 **Complete reasoning chain**:
 
-1. **Diagnose: singularity crossing**. A straight Cartesian line can pass through an internal singularity (e.g., wrist singularity when joints 4 and 6 align on a UR arm). At the singular point, $\sigma_{\min}(J) \to 0$, and $\dot{q} = J^+\dot{x}$ requires $\dot{q} \to \infty$ to maintain the commanded $\dot{x}$.
+1. **Diagnose: singularity crossing**. A straight Cartesian line can pass through an internal singularity (e.g., wrist singularity when $\theta_5 = 0$ makes joints 4 and 6 align on a UR arm). At the singular point, $\sigma_{\min}(J) \to 0$, and $\dot{q} = J^+\dot{x}$ requires $\dot{q} \to \infty$ to maintain the commanded $\dot{x}$.
 
 2. **Confirm**: log the SVD condition number $\kappa(J)$ over time. A sharp spike at the moment of the jerk confirms a singularity crossing.
 

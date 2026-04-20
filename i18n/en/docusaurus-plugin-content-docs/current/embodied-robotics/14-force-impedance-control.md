@@ -261,15 +261,23 @@ This duality tells us: wrench and twist live on SE(3) and you cannot freely lump
 
 ### Adjoint transform -- cross-frame wrench conversion
 
-Translate a wrench from the gripper centre A to the tool tip B:
+**Convention** (this chapter follows Lynch & Park §3.4): wrench is ordered $W = [m, f]^T$ (moment on top, force on bottom), twist is ordered $V = [\omega, v]^T$. $T_{AB} = (R, p) \in SE(3)$ is the pose of frame $B$ expressed in frame $A$.
+
+Twist adjoint (the matrix actually built in code) is:
 
 $$
-W_A = \mathrm{Ad}_{T_{AB}}^T \cdot W_B, \quad \mathrm{Ad}_T^T = \begin{bmatrix}R & \hat{p}R \\ 0 & R\end{bmatrix}
+\mathrm{Ad}_{T_{AB}} = \begin{bmatrix} R & 0 \\ \hat{p} R & R \end{bmatrix} \qquad (V_A = \mathrm{Ad}_{T_{AB}} V_B)
 $$
 
-where $\hat{p}$ is the skew-symmetric matrix of the translation vector.
+where $\hat{p}$ is the skew-symmetric matrix of the translation vector. Wrenches are dual to twists and therefore transform **by $\mathrm{Ad}^T$ (contravariant direction)**:
 
-**Trap**: a pure force $f$, once translated, **couples out an extra moment** $m$ via $\hat{p}\cdot R\cdot f$. Developers who ignore this term issue commands that are simply wrong.
+$$
+W_A = \mathrm{Ad}_{T_{AB}}^T \cdot W_B
+$$
+
+In code you construct $\mathrm{Ad}_T$ once and use `Ad_T.transpose()` whenever you conjugate a wrench / stiffness.
+
+**Trap**: a pure force $f$, through the $\hat{p} R \cdot f$ block, **couples out an extra moment** $m$ (lever-arm effect). Developers who ignore this term issue commands that are simply wrong.
 
 ### Why a diagonal K destabilises a 30 cm stick poking a wall (an interview classic)
 
@@ -286,12 +294,13 @@ where $\hat{p}$ is the skew-symmetric matrix of the translation vector.
 Franka / KUKA iiwa FRI APIs mandate: K must be a strict SPD matrix defined **relative to the current TCP** (tool centre point).
 
 ```cpp
+// Build Ad_T = [R, 0; p̂R, R] (the twist adjoint; wrenches transform via Ad_T^T)
 Eigen::Matrix6d Ad_T;
-Ad_T.topLeftCorner(3,3)     = R;
-Ad_T.bottomRightCorner(3,3) = R;
-Ad_T.bottomLeftCorner(3,3)  = skew_symmetric(p) * R;  // lever-arm coupling term
+Ad_T.topLeftCorner(3,3)     = R;                       // [ω] block
 Ad_T.topRightCorner(3,3)    = Eigen::Matrix3d::Zero();
-Eigen::Matrix6d K_tcp = Ad_T.transpose() * K_flange * Ad_T;  // consistent transfer
+Ad_T.bottomLeftCorner(3,3)  = skew_symmetric(p) * R;   // lever-arm coupling
+Ad_T.bottomRightCorner(3,3) = R;
+Eigen::Matrix6d K_tcp = Ad_T.transpose() * K_flange * Ad_T;  // stiffness conjugation: W = Ad_T^T · W
 ```
 
 ### Physical intuition for the operational-space inertia $\Lambda$

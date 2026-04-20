@@ -25,8 +25,7 @@ QoS is the contract between publisher and subscriber that governs **how data tra
 |--------|---------|-----------------|
 | **Reliability** | Best-effort / Reliable | "Is retransmission worth the latency?" Best-effort drops lost packets; Reliable retransmits them |
 | **Durability** | Volatile / Transient local | "Should late joiners get old data?" Transient local caches the last N samples for new subscribers |
-| **History** | Keep last / Keep all | "How many samples to buffer?" Keep last stores the most recent N; Keep all stores everything (memory danger) |
-| **Depth** | Integer | The N in Keep last — how deep the buffer goes |
+| **History** | Keep last / Keep all | "How many samples to buffer?" Keep last stores the most recent N; Keep all stores everything (memory danger). DDS only has these two policies; N is a depth *parameter* of Keep last, not a separate policy |
 | **Deadline** | Duration | "Maximum allowed gap between samples" — the middleware raises an event if no message arrives in time |
 | **Liveliness** | Automatic / Manual by topic | "How do we detect a dead publisher?" Automatic lets DDS heartbeat handle it; Manual requires the node to explicitly assert liveness |
 | **Lifespan** | Duration | "How long is a sample valid?" Expired samples are discarded even if still in the queue |
@@ -40,7 +39,7 @@ QoS is the contract between publisher and subscriber that governs **how data tra
 | `SensorDataQoS` | Keep last 5, Best-effort, Volatile | LiDAR, camera, IMU — high-frequency, drop-tolerant |
 | `SystemDefaultsQoS` | Keep last 10, Reliable, Volatile | General inter-node communication |
 | `ServicesQoS` | Keep last 10, Reliable, Volatile | Service calls |
-| `ParametersQoS` | Keep last 1000, Reliable, Transient local | Parameter events |
+| `ParametersQoS` | Keep last 1000, Reliable, Volatile | Parameter events (rclcpp default) |
 
 $$
 \text{QoS compatibility} \iff Q_{\text{pub}} \geq Q_{\text{sub}} \quad \text{(publisher quality must meet or exceed subscriber demand)}
@@ -93,7 +92,7 @@ ROS 2 uses DDS (Data Distribution Service) as its middleware. When a node starts
 
 ### Why "silent failure" happens
 
-The DDS spec treats QoS incompatibility as a **policy decision, not an error**. The middleware assumes you intentionally set incompatible QoS to prevent a connection. ROS 2 mitigates this with `IncompatibleQosEvent` callbacks (since Foxy), but most tutorials do not set them up.
+The DDS spec treats QoS incompatibility as a **policy decision, not an error**. The middleware assumes you intentionally set incompatible QoS to prevent a connection. ROS 2 mitigates this with `RequestedIncompatibleQoSEvent` (subscriber side) and `OfferedIncompatibleQoSEvent` (publisher side) callbacks, but most tutorials do not register them.
 
 ### Discovery in multi-robot systems
 

@@ -232,8 +232,10 @@ public:
   explicit PointCloudFilter(const rclcpp::NodeOptions& options)
     : Node("pointcloud_filter", options)
   {
-    // 啟用 intra-process comm（同 process 的 Node 間 zero-copy）
-    // NodeOptions 需設定 use_intra_process_comms(true)
+    // Intra-process zero-copy 成立條件（三者缺一不可）：
+    //   1. Subscriber 所在 Node 的 NodeOptions 設 use_intra_process_comms(true)
+    //   2. Publisher 所在 Node 的 NodeOptions 也要設 use_intra_process_comms(true)
+    //   3. Publisher 要用 publish(std::unique_ptr<Msg>) — 若發 SharedPtr 就會退化為拷貝
 
     auto qos = rclcpp::SensorDataQoS();
 

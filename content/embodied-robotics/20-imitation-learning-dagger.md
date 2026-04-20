@@ -49,7 +49,7 @@ $$
 
 **物理意義**：最小化策略輸出和專家動作的 MSE。連續動作空間用 L2，離散用 cross-entropy。只能保證在**專家數據分布上**表現好，對偏離狀態沒有任何保證。
 
-2. **BC 累積誤差的上界**（Ross et al., 2011）：
+2. **BC 累積誤差的上界**（Ross & Bagnell, AISTATS 2010）：
 
 $$
 J(\pi_E) - J(\pi_\theta) \le T^2 \epsilon + O(T)
@@ -64,6 +64,8 @@ $$
 $$
 
 **物理意義**：第 $i$ 輪用學生策略 $\pi_i$ 跑環境收集狀態 $s$，問專家「你在這裡會怎麼做？」得到 $\pi_E(s)$。把新 $(s, \pi_E(s))$ 加入數據集重新訓練。DAgger 把誤差上界從 $O(T^2)$ 降到 $O(T)$ — 線性取代二次。
+
+**原論文的 $\beta$-mixing schedule**：Ross et al. 2011 定義的 rollout 策略其實是 $\pi_i = \beta_i \pi_E + (1 - \beta_i)\hat{\pi}_i$，$\beta_i$ 隨迭代遞減到 0 — 初期多讓專家帶路避免學生過度瞎走。實務上大多數實作（含本章 code 骨架）直接取 $\beta = 0$ 純用學生動作，稱為 "pure DAgger"；論文的 regret 保證對此變體仍然成立，但若 $\beta > 0$ 初期會更穩。
 
 4. **IRL 的 MaxEntropy 目標**：
 
@@ -96,7 +98,7 @@ $$
 
 設專家策略的狀態分布為 $d^{\pi_E}$，學生策略 $\pi_\theta$ 的狀態分布為 $d^{\pi_\theta}$。BC 在 $d^{\pi_E}$ 上訓練，但部署時面對 $d^{\pi_\theta}$。
 
-Ross et al. (2011) 給出的性能差距上界：
+Ross & Bagnell (AISTATS 2010, "Efficient Reductions for Imitation Learning") 證明的 BC 性能差距上界：
 
 $$
 J(\pi_E) - J(\pi_\theta) \le T^2 \epsilon_{train} + O(T)
@@ -111,7 +113,7 @@ $$
 
 ### DAgger 的收斂保證
 
-DAgger 在 $N$ 輪迭代後：
+Ross, Gordon & Bagnell (AISTATS 2011) 對 DAgger 的線性上界：
 
 $$
 J(\pi_E) - J(\pi_{best}) \le \epsilon_{train} \cdot T + O\left(\sqrt{\frac{T \log N}{N}}\right)
@@ -178,7 +180,7 @@ $$
 不輸出單步動作 $a_t$，而是輸出未來 $H$ 步的動作序列 $[a_t, a_{t+1}, ..., a_{t+H-1}]$：
 
 1. **降低有效 horizon**：原來 $T=200$ 步變成 $T/H = 200/16 \approx 13$ 個 chunk → compounding error 從 $T^2$ 降到 $(T/H)^2$
-2. **Temporal ensemble**：相鄰 chunk 有重疊，取指數加權平均 → 動作更平滑
+2. **Temporal ensemble（ACT 的推理時 trick，非 chunking 本身的性質）**：ACT 在推理時把多個重疊 chunk 對同一時刻的預測做指數加權平均 → 動作更平滑。這是 ACT 論文特有的 inference-time 設計；單純 action chunking 不需要 temporal ensemble 也能用。
 3. **推理頻率**：不需要每步推理，每 $H$ 步推理一次 → 允許更大的模型（推理延遲被 amortize）
 
 **ACT (Action Chunking with Transformers)**：用 CVAE + Transformer 做 action chunking，在雙臂操作任務表現突出。Diffusion Policy + action chunking 是 2023-2024 年 IL 最 hot 的組合。
@@ -456,7 +458,8 @@ class DAggerTrainer:
 
 ## 延伸閱讀
 
-- **Ross et al.,《A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning》(2011)** — DAgger 原論文，distribution shift 的嚴格分析，IL 領域的基石
+- **Ross & Bagnell,《Efficient Reductions for Imitation Learning》(AISTATS 2010)** — BC $O(T^2)$ 下界的原論文，distribution shift 數學根源的嚴格分析
+- **Ross, Gordon & Bagnell,《A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning》(AISTATS 2011)** — DAgger 原論文，給出 $O(T)$ 線性上界與 $\beta$-mixing schedule，IL 領域的基石
 - **Ho & Ermon,《Generative Adversarial Imitation Learning》(2016)** — GAIL 論文，用 GAN 統一 IRL + RL，證明了和 occupancy measure matching 的對偶關係
 - **Chi et al.,《Diffusion Policy: Visuomotor Policy Learning via Action Diffusion》(2023)** — Diffusion Policy 論文，用擴散模型做策略表示，解決多模態動作問題
 - **Zhao et al.,《Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware》(2023)** — ACT 論文，action chunking + Transformer，雙臂操作突破性結果

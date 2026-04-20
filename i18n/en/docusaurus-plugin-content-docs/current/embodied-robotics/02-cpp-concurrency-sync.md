@@ -268,7 +268,7 @@ Key design decisions:
 
 4. **`std::async` always launches a new thread** — only `launch::async` does. The default policy is `launch::async | launch::deferred`, meaning the runtime may choose deferred execution (runs in the calling thread when you call `.get()`). **Fix**: specify `std::async(std::launch::async, func)` explicitly if you need true concurrency.
 
-5. **Using `std::mutex` inside a real-time control callback** — a low-priority thread holding the mutex causes **priority inversion**: the high-priority control thread blocks until the low-priority thread releases. Jitter explodes, watchdog triggers. **Fix**: use lock-free data structures (atomic pointer swap, SPSC queue) on the real-time path; reserve mutexes for non-real-time threads.
+5. **Using `std::mutex` inside a real-time control callback** — a low-priority thread holding the mutex causes **priority inversion**: the high-priority control thread blocks until the low-priority thread releases. Jitter explodes, watchdog triggers. Linux pthread mutex does **not** enable priority inheritance by default, but you can turn it on with `pthread_mutexattr_setprotocol(..., PTHREAD_PRIO_INHERIT)` (the standard PREEMPT_RT escape hatch). **Fix**: use lock-free data structures (atomic pointer swap, SPSC queue) on the real-time path; if you must hold a mutex, enable `PTHREAD_PRIO_INHERIT`.
 
 ## Situational Questions
 

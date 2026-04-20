@@ -75,9 +75,9 @@ $$
 - $a_i \cos\theta_i / a_i \sin\theta_i$：連桿長 $a_i$ 經關節角 $\theta_i$ 旋轉後在父 frame X/Y 軸上的分量
 - $d_i$：沿父 frame Z 軸的線性平移
 
-**Standard 與 Modified DH 的關鍵差異**：
-- **Standard DH**（Denavit 原版）：frame $i$ 附著在**連桿 $i$ 末端**；$a_i, \alpha_i$ 用第 $i$ 軸到第 $i+1$ 軸的關係；乘法順序為 `Rot_Z → Trans_Z → Trans_X → Rot_X`
-- **Modified DH**（Craig 版）：frame $i$ 附著在**連桿 $i$ 起端**；$a_{i-1}, \alpha_{i-1}$ 用第 $i-1$ 軸到第 $i$ 軸的關係；乘法順序為 `Rot_X → Trans_X → Rot_Z → Trans_Z`
+**Standard 與 Modified DH 的關鍵差異**（以 frame $i$ 的 $Z_i$ 軸對齊哪個關節軸作分界，最不會搞混）：
+- **Standard DH**（Denavit 原版）：frame $i$ 的 $Z_i$ 對齊**第 $i+1$ 軸**；$a_i, \alpha_i$ 是第 $i$ 軸到第 $i+1$ 軸的幾何關係；乘法順序為 `Rot_Z → Trans_Z → Trans_X → Rot_X`
+- **Modified DH**（Craig 版）：frame $i$ 的 $Z_i$ 對齊**第 $i$ 軸**；$a_{i-1}, \alpha_{i-1}$ 是第 $i-1$ 軸到第 $i$ 軸的幾何關係；乘法順序為 `Rot_X → Trans_X → Rot_Z → Trans_Z`
 
 **業界選擇**：教科書常見 Standard DH；但 Modified DH 對樹狀結構、閉鏈、相鄰平行關節處理更穩定，現代 ROS 底層運動學庫（如 Orocos KDL、Pinocchio 內部）傾向用 MDH 或直接跳過 DH 改用 screw theory（Product of Exponentials）。
 
@@ -164,7 +164,8 @@ def forward_kinematics(dh_table, joint_values, tool_transform=None):
     return T
 
 
-# 範例：UR5 的 Standard DH 表（近似值）
+# 範例：UR5 的 Standard DH 表（以下為四捨五入值，精確值請查 Universal Robots 官方手冊：
+# d_1=0.089159, d_4=0.10915, d_5=0.09465, d_6=0.0823, a_2=-0.425, a_3=-0.39225）
 ur5_dh = [
     (0,      np.pi/2,  0.089,  0),
     (-0.425, 0,        0,      0),

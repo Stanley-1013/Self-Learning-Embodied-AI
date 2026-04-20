@@ -69,7 +69,7 @@ $$
 \min_{R, t} \sum_{k} \| R \mathbf{p}_k + t - \mathbf{q}_k \|^2
 $$
 
-**物理意義**：找旋轉 $R$ 和平移 $t$ 讓兩幀點雲最大程度重合。**陷阱**：初值差會掉進局部最優 → 需要 IMU 或里程計提供好的初始猜測。NDT（Normal Distributions Transform）用常態分佈替代逐點配對，對初值更魯棒。
+**物理意義**：找旋轉 $R$ 和平移 $t$ 讓兩幀點雲最大程度重合。上式是 **point-to-point ICP**；實務 LiDAR SLAM（LOAM / LIO-SAM / FAST-LIO2）多用 **point-to-plane** 變體（將殘差投影到局部平面法向），在平面豐富場景收斂更快、更魯棒。**陷阱**：初值差會掉進局部最優 → 需要 IMU 或里程計提供好的初始猜測。NDT（Normal Distributions Transform）用常態分佈替代逐點配對，對初值更魯棒。
 
 4. **IMU 預積分**（緊耦合的數學基石）：
 
@@ -359,7 +359,7 @@ ros2 run nav2_map_server map_server --ros-args \
    - 查看 scan matching 的 fitness score，走廊段應該明顯偏低
    - 用 `tf2_echo map odom` 觀察 TF 是否在走廊段持續漂移
 3. **解法（短期）**：
-   - **加 IMU 緊耦合**：上 LIO-SAM 或 FAST-LIO2，IMU 加速度計能補償軸向位移估計，在 LiDAR 退化方向提供約束
+   - **加 IMU 緊耦合**：上 LIO-SAM 或 FAST-LIO2，IMU 預積分在**短時段內**提供軸向位移先驗 + 陀螺儀防偏航漂移；但 IMU 本身（加速度計二次積分有 bias 漂移）**不能獨立解除長期軸向退化**，仍需 loop closure / UWB / 人工路標做絕對約束
    - **加輪式里程計**：作為額外的位移約束注入因子圖
    - **降速**：機器人速度從 1 m/s 降到 0.3 m/s，讓每幀 scan 重疊率更高
 4. **解法（長期）**：

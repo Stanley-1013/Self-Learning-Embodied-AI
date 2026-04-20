@@ -69,7 +69,7 @@ $$
 \min_{R, t} \sum_{k} \| R \mathbf{p}_k + t - \mathbf{q}_k \|^2
 $$
 
-**Physical meaning**: find the rotation $R$ and translation $t$ that best align two point clouds. **Trap**: a poor initial guess falls into local minima → IMU or odometry must provide a good initial estimate. NDT (Normal Distributions Transform) replaces point-to-point matching with normal distribution cells, making it more robust to initialization.
+**Physical meaning**: find the rotation $R$ and translation $t$ that best align two point clouds. The formulation above is **point-to-point ICP**; production LiDAR SLAM (LOAM / LIO-SAM / FAST-LIO2) typically uses **point-to-plane** variants (residual projected onto the local plane normal), which converge faster and are more robust in plane-rich environments. **Trap**: a poor initial guess falls into local minima → IMU or odometry must provide a good initial estimate. NDT (Normal Distributions Transform) replaces point-to-point matching with normal distribution cells, making it more robust to initialization.
 
 4. **IMU Pre-integration** (mathematical foundation of tight coupling):
 
@@ -359,7 +359,7 @@ ros2 run nav2_map_server map_server --ros-args \
    - Examine the scan matching fitness score — it should be noticeably lower in corridor segments
    - Run `tf2_echo map odom` and watch for continuous drift during corridor traversal
 3. **Short-term fixes**:
-   - **Add tightly-coupled IMU**: switch to LIO-SAM or FAST-LIO2; the accelerometer compensates axial displacement estimates where LiDAR degrades
+   - **Add tightly-coupled IMU**: switch to LIO-SAM or FAST-LIO2; IMU pre-integration provides a **short-term** axial displacement prior between scans + gyroscope prevents yaw drift. But IMU alone (accelerometer double-integration has bias drift) **cannot resolve long-term axial degeneracy independently** — loop closure / UWB / artificial landmarks are still required for absolute constraints
    - **Add wheel odometry**: inject as an additional displacement constraint into the factor graph
    - **Slow down**: reduce robot speed from 1 m/s to 0.3 m/s so consecutive scans overlap more
 4. **Long-term fixes**:

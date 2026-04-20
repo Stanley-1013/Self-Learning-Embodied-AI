@@ -31,7 +31,7 @@ sidebar_position: 21
 
 **Residual Learning（殘差學習）**：$u = u_{\text{model}} + u_{\text{residual\_NN}}$，用解析模型（剛體動力學、PID 控制器）搞定 90% 的可建模部分，NN 只負責學那 10% 的不可建模殘差（非線性摩擦、柔性）。**工程優勢**：解析部分提供安全基線 + 可解釋性，NN 部分可以小、可以快。
 
-**Teacher-Student Distillation（師生蒸餾）**：在 sim 裡訓練一個能存取**特權資訊**（精確接觸力、物體質量、摩擦係數）的 Teacher policy，再訓練一個只用**真機可觀測量**（相機、關節編碼器）的 Student policy 模仿 Teacher 的行為。透過**資訊瓶頸**迫使 Student 從歷史觀測中**隱式推斷**物理參數。
+**Teacher-Student Distillation（師生蒸餾）**：在 sim 裡訓練一個能存取**特權資訊**（精確接觸力、物體質量、摩擦係數）的 Teacher policy，再訓練一個只用**真機可觀測量**（相機、關節編碼器）的 Student policy 模仿 Teacher 的行為 — 關鍵是 Student 只用可部署的觀測模態去模仿 Teacher（Chen et al. 2020 "Learning by Cheating" 的 privileged learning 框架）。在 locomotion 場景（Lee et al. 2020、Miki et al. 2022）常用「歷史觀測 + RNN/LSTM」讓 Student 隱式推斷物理參數，但這是設計選擇而非定義 — 某些任務的 Student 可以是單步前饋網路。
 
 **在感知 → 規劃 → 控制閉環的位置**：
 - **輸入**：sim-trained policy + 真機感測器數據
@@ -426,7 +426,7 @@ def update_mujoco_xml(xml_path, identified_params):
 
 **完整推理鏈**：
 
-1. **先查延遲**：MuJoCo 預設 0ms 致動器延遲，真機 UR5 有 ~8ms 控制延遲 + 通訊延遲。在 sim 裡加入 8ms delay 重新測成功率 → 如果掉到 50%，延遲是主因
+1. **先查延遲**：MuJoCo 預設 0ms 致動器延遲，真機 UR5 的 RTDE servoJ 週期就是 ~8ms（125 Hz），但加上 ROS/網路/控制器管線後端到端常是 20–40ms。在 sim 裡逐步加入 8–40ms 範圍的 delay 重新測成功率 → 若掉到 50%，延遲是主因（DR 的延遲範圍別只設到 8ms，那只是下界）
 2. **再查摩擦**：MuJoCo 預設摩擦係數 vs 真機夾爪實際摩擦可能差 2-3 倍。真機上觀察物體是否在夾爪中滑動 → 如果是，在 sim 裡降低摩擦係數重測
 3. **再查噪聲**：真機 RGB 相機有色彩偏差、運動模糊；關節編碼器有量化噪聲。在 sim 裡加入對應噪聲模型
 4. **逐項加入後比對**：每加一個 gap 源，記錄成功率變化，找出**最大貢獻者**
@@ -512,7 +512,8 @@ def update_mujoco_xml(xml_path, identified_params):
 - **OpenAI,《Solving Rubik's Cube with a Robot Hand》(2019)** — ADR 的經典應用，展示了從窄範圍自動擴展到極端物理變異的完整流程；是理解「為什麼 DR 範圍不能手動設」的最佳案例
 - **Tobin et al.,《Domain Randomization for Transferring Deep Neural Networks from Simulation to the Real World》(2017)** — DR 的奠基論文，定義了視覺 DR 和物理 DR 的基本框架
 - **Rusu et al.,《Sim-to-Real Robot Learning from Pixels with Progressive Nets》(2017)** — progressive neural network 做 sim-to-real 遷移，了解非 DR 路線的替代方案
-- **ETH Zurich,《Learning to Walk in Minutes Using Massively Parallel Deep RL》(2022)** — Teacher-Student + IsaacGym 大規模並行訓練的範例，從 sim 到 ANYmal 四足機器人的完整 pipeline
+- **Rudin et al. (ETH Zurich),《Learning to Walk in Minutes Using Massively Parallel Deep RL》(CoRL 2021)** — Isaac Gym 上的大規模並行 PPO + DR 範例，ANYmal 四足機器人的完整 pipeline。注意：這是並行 RL / DR 路線，**不是 Teacher-Student**
+- **Lee et al.,《Learning quadrupedal locomotion over challenging terrain》(Science Robotics 2020)** / **Miki et al.,《Learning robust perceptive locomotion for quadrupedal robots in the wild》(Science Robotics 2022)** — Teacher-Student + LSTM 隱式物理推斷的正宗範例，ANYmal 真機部署的里程碑
 - **《具身智能算法工程師 面試題》Ch9 Sim-to-Real** — 涵蓋 DR / SysID / DA 的面試高頻考點，情境題格式
 - **Zhao et al.,《Sim-to-Real Transfer in Deep Reinforcement Learning for Robotics: a Survey》(2020)** — 最全面的 survey，分類整理了所有 sim-to-real 策略及其適用場景
 - **Isaac Gym / IsaacLab 官方文件** — 大規模並行 DR 訓練的工程實作指南，含 DR 參數配置範例

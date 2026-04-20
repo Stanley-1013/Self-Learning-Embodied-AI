@@ -114,6 +114,8 @@ Spatial inertia becomes a $6 \times 6$ matrix, and each kinematic/dynamic propag
 
 **Forward pass** (base -> end-effector, $i = 1 \ldots n$):
 
+> Vector convention: all vectors below are expressed in **frame $i$**; $\hat{z} = [0,0,1]^T$ is joint $i$'s rotation axis in its own frame; $R_i$ is the rotation matrix from frame $i-1$ to $i$; $r_i$ is the vector from frame $i-1$ origin to frame $i$ origin, expressed in frame $i$. Gravity is injected via the base pseudo-acceleration trick ($\ddot p_0 = -g$), so gravity does not appear explicitly in the subsequent formulas.
+
 $$
 \omega_i = R_i^T (\omega_{i-1} + \dot{q}_i \hat{z})
 $$
@@ -228,7 +230,7 @@ $$
 A(q)\dot{q} = \begin{bmatrix}l \\ k\end{bmatrix}
 $$
 
-$l$ = linear momentum, $k$ = angular momentum. $A(q)$ maps joint velocities to centroidal momentum and is the high-level planning surface for WBC. Pinocchio API: `pinocchio::ccrba(model, data, q, v)` -> `data.Ag, data.hg`.
+$l$ = linear momentum, $k$ = angular momentum. $A(q)$ maps joint velocities to centroidal momentum and is the high-level planning surface for WBC. Pinocchio API: `pinocchio::ccrba(model, data, q, v)` -> `data.Ag, data.hg`. **Convention note**: we follow the Pinocchio ordering (top 3 rows linear, bottom 3 angular, i.e. `hg = [l; k]`); Orin & Goswami 2008 use the opposite ordering $[k; l]$. Always check the convention before copying formulas across papers, otherwise indices will shift.
 
 <details>
 <summary>Deep dive: Contact Wrench Cone (CWC) and multi-contact QP -- why ZMP is obsolete</summary>
@@ -467,7 +469,7 @@ Weight matrix $W$ reflects the inverse variance of measurement noise per joint.
 **Step 7: physical consistency via LMI/SDP**
 - This step separates academia from industry
 - Plain WLS can produce **negative masses, non-positive-definite inertia tensors** (mathematically optimal, physically illegal)
-- Constrain with Linear Matrix Inequalities: $m_i > 0$, $I_i \succ 0$ (positive definite), $\text{tr}(I_i) >$ max eigenvalue (triangle inequality)
+- Constrain with Linear Matrix Inequalities: $m_i > 0$, $I_i \succ 0$ (positive definite), and the **triangle inequality** $I_{jj} + I_{kk} \geq I_{ii}$ on the principal axes for every permutation of $\{i,j,k\}$ (equivalently, the Souloumiac / Traversaro pseudo-inertia matrix $\succeq 0$ in LMI form; note: $\text{tr}(I_i) > \lambda_{\max}$ is only a necessary weakening — using it alone admits physically unrealizable inertia)
 - Tooling: SciPy `cvxpy` + SDP solver (Mosek / SCS)
 
 **Step 8: cross-validation**
@@ -503,7 +505,7 @@ $$
 
 $\Gamma$ is the positive-definite adaptive gain.
 
-**Lyapunov proof**: $V = \tfrac{1}{2}s^T M s + \tfrac{1}{2}\tilde{\pi}^T \Gamma^{-1} \tilde{\pi}$. Differentiating and using $\dot{M} - 2C$ skew-symmetry cancels the Coriolis term -> $\dot{V} = -s^T K s \leq 0$ -> $e \to 0$ (but not necessarily $\hat{\pi} \to \pi$).
+**Lyapunov proof**: $V = \tfrac{1}{2}s^T M s + \tfrac{1}{2}\tilde{\pi}^T \Gamma^{-1} \tilde{\pi}$. Differentiating and using $\dot{M} - 2C$ skew-symmetry cancels the Coriolis term -> $\dot{V} = -s^T K s \leq 0$. Since $V$ is bounded below and $\dot V \leq 0$, we get $s \in L^\infty \cap L^2$; then **Barbalat's Lemma** ($\dot V$ uniformly continuous) yields $s \to 0$ and hence $e \to 0$ (but not necessarily $\hat{\pi} \to \pi$).
 
 **Persistent Excitation (PE) trap**:
 - $e \to 0$ does not imply parameter convergence

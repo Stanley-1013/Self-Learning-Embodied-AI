@@ -64,7 +64,7 @@ U_{\text{att}} = \tfrac{1}{2} k \|q - q_{\text{goal}}\|^2, \qquad
 U_{\text{rep}} = \tfrac{1}{2} \eta \left(\tfrac{1}{\rho} - \tfrac{1}{\rho_0}\right)^2 \;\; (\rho < \rho_0)
 $$
 
-**物理意義**：吸引勢場拉向目標（拋物線，遠處力愈大）；排斥勢場只在與障礙距離 $\rho < \rho_0$ 時生效，靠近時指數飆升。**災難場景**：機器人夾在兩障礙正中央 → 吸引梯度 = 斥力梯度方向相反 → **合力為零死鎖**。面試經典陷阱。
+**物理意義**：吸引勢場拉向目標（拋物線，遠處力愈大）；排斥勢場只在與障礙距離 $\rho < \rho_0$ 時生效，靠近時指數飆升。**災難場景**：任何 $-\nabla U_{\text{att}} + \sum -\nabla U_{\text{rep},i} = 0$（或局部 potential 極小）的點都會卡死 — 兩對稱障礙中央只是特例，**U 型走廊／窄通道／目標藏在凹形牆後**同樣觸發。面試經典陷阱。
 
 **③ Velocity Obstacle / ORCA 半平面**（F2 家族的黃金標準）：
 
@@ -72,7 +72,7 @@ $$
 VO_{A|B} = \{\mathbf{v}_A \mid \exists\, t > 0 : (\mathbf{v}_A - \mathbf{v}_B) \cdot t \in B \oplus (-A)\}
 $$
 
-**物理意義**：把障礙物 $B$ 用 Minkowski 和膨脹成含機器人形狀的區域，從原點射出的相對速度錐就是「會撞」的速度集合。ORCA 把碰撞錐線性化為**半平面約束** $(\mathbf{v}_A - (\mathbf{v}_A^{\text{opt}} + \mathbf{u}/2)) \cdot \mathbf{n} \geq 0$，所有約束線性 → **LP 求解 $O(n)$**，毫秒級算出上千台 AGV 無碰速度。
+**物理意義**：把障礙物 $B$ 用 Minkowski 和膨脹成含機器人形狀的區域，從原點射出的相對速度錐就是「會撞」的速度集合。ORCA 把碰撞錐線性化為**半平面約束** $(\mathbf{v}_A - (\mathbf{v}_A^{\text{opt}} + \mathbf{u}/2)) \cdot \mathbf{n} \geq 0$，其中 $\mathbf{u}$ 是把相對速度推出 VO 邊界的最小向量、$\mathbf{n}$ 取作 $\mathbf{u}$ 的單位向量（**指向 VO 外側**，半平面因此指向「遠離碰撞」一側）。所有約束線性 → **LP 求解 $O(n)$**，毫秒級算出上千台 AGV 無碰速度。
 
 **④ Chance-Constrained MPC 3σ 時空管**（F3 家族的現代答案）：
 
@@ -88,7 +88,7 @@ $$
 \dot{h}(x, u) + \alpha(h(x)) \geq 0, \qquad h(x) \geq 0 \iff x \in \mathcal{C}
 $$
 
-**物理意義**：$h(x) \geq 0$ 定義安全集合 $\mathcal{C}$（離障礙物距離）；$\dot{h}$ 是你靠近危險邊界的速度；$\alpha(h(x))$ 是允許的最大靠近速度（正比於距邊界距離）。**保證**：越靠近死線 $h=0$，向危險方向速度**幾何級數衰減至零** → 永不越界。**CBF 是安全濾網不主動產力**，沒有 APF 的 local minima 問題。
+**物理意義**：$h(x) \geq 0$ 定義安全集合 $\mathcal{C}$（離障礙物距離）。$-\dot{h}$ 是**實際**靠近危險邊界的速率；不等式 $\dot h + \alpha(h) \geq 0$ 等價於 $-\dot h \leq \alpha(h)$，也就是把「實際靠近速率」上限卡在 $\alpha(h(x))$（**允許的最大靠近速率**，隨 $h$ 線性減小：越靠近邊界、這個上限越小）。**保證**：當 $h \to 0$，允許的最大靠近速率 $\alpha(h) \to 0$，向危險方向速度**幾何級數衰減至零** → 永不越界。**CBF 是安全濾網不主動產力**，沒有 APF 的 local minima 問題。
 
 **⑥ CBF-QP 最小投影**（F4 家族的實作形式，給 RL 加硬安全保證的標準架構）：
 
@@ -221,7 +221,7 @@ double score = alpha * headingDiff(traj.back(), goal)
    $$
    (\mathbf{v}_A - (\mathbf{v}_A^{\text{opt}} + \mathbf{u}/2)) \cdot \mathbf{n} \geq 0
    $$
-   其中 $\mathbf{u}$ 是把 $\mathbf{v}_A - \mathbf{v}_B$ 推出錐外的最小擾動向量，$\mathbf{n}$ 是垂直法向量。**所有約束線性 → LP 求解 $O(n)$**，毫秒級算出上千台 AGV / 無人機無碰速度。
+   其中 $\mathbf{u}$ 是把 $\mathbf{v}_A - \mathbf{v}_B$ 推出碰撞錐外的最小擾動向量，$\mathbf{n}$ 取作 **$\mathbf{u}$ 的單位向量（指向 VO 外側）**，半平面方向才會一致地指向「遠離碰撞」一側；方向取反則不等式符號整個反掉。**所有約束線性 → LP 求解 $O(n)$**，毫秒級算出上千台 AGV / 無人機無碰速度。
 
 **Freezing Robot Problem 災難（面試必答）**：
 - 被夾在兩個相反方向行人中間：左行人給「向右」半平面、右行人給「向左」半平面
@@ -666,7 +666,7 @@ $$
 v_{\max} = \max\left(0, \frac{S_p - (S_B + S_R + S_C)}{T}\right)
 $$
 
-其中 $S_p$ 是相對距離，$S_B, S_R, S_C$ 是機器人煞車距離、反應距離、人類侵入距離。
+其中 $S_p$ 是相對距離，$S_B, S_R, S_C$ 是機器人煞車距離、反應距離、人類侵入距離，$T$ 為機器人**反應 + 煞車總時間**。**注意**：這是簡化反解；實務 ISO/TS 15066 以 $S_p(t_0) = S_H + S_R + S_S + C + Z_d + Z_r$ 是否超過門檻為主判據，而非直接算 $v_{\max}$。
 
 **Cartesian 空間勢場避障**：
 - 機械臂各連桿包 **Capsules**（圓柱 + 兩端半球，比球包圍盒緊、比凸包簡單）

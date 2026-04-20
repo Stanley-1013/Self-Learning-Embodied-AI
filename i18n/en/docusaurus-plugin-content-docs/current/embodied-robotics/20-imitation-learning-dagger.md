@@ -59,6 +59,8 @@ $$
 
 **Physical meaning**: Round $i$ runs the student policy $\pi_i$ in the environment to collect states $s$, then asks the expert "what would you do in this state?" to get $\pi_E(s)$. Add the new $(s, \pi_E(s))$ pairs to the dataset and retrain. Intuition: let the student make mistakes, the teacher corrects, next time they'll know.
 
+**The original $\beta$-mixing schedule**: the 2011 paper actually rolls out with $\pi_i = \beta_i \pi_E + (1 - \beta_i)\hat{\pi}_i$ where $\beta_i$ decays to 0 — letting the expert drive more in the early rounds. Most implementations (including the code skeleton below) use the $\beta = 0$ variant ("pure DAgger") for simplicity; the regret guarantee still holds, but keeping $\beta > 0$ early on tends to be more stable in practice.
+
 3. **IRL Objective** (MaxEntropy IRL):
 
 $$
@@ -76,7 +78,7 @@ where $Z(R) = \int \exp(\sum_t R(s_t, a_t)) d\tau$ is the partition function.
 
 Let the expert policy's state distribution be $d^{\pi_E}$ and the student policy $\pi_\theta$'s state distribution be $d^{\pi_\theta}$. BC training data comes from $d^{\pi_E}$, but at deployment the policy faces $d^{\pi_\theta}$.
 
-Performance gap upper bound (Ross et al., 2011):
+BC performance gap upper bound (Ross & Bagnell, AISTATS 2010, "Efficient Reductions for Imitation Learning"):
 
 $$
 J(\pi_E) - J(\pi_\theta) \le T^2 \epsilon_{train} + O(T)
@@ -86,7 +88,7 @@ where $\epsilon_{train}$ is the average single-step error on the **expert distri
 
 ### DAgger's Theoretical Guarantee
 
-After $N$ DAgger iterations, the performance gap bound becomes:
+Ross, Gordon & Bagnell (AISTATS 2011) proved the linear bound for DAgger. After $N$ iterations the performance gap becomes:
 
 $$
 J(\pi_E) - J(\pi_{best}) \le \epsilon_{train} \cdot T + O(\sqrt{T \log N / N})
@@ -419,7 +421,8 @@ class DAggerTrainer:
 
 ## Further Reading
 
-- **Ross et al., "A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning" (2011)** — DAgger original paper, rigorous distribution shift analysis and solution, clearly written
+- **Ross & Bagnell, "Efficient Reductions for Imitation Learning" (AISTATS 2010)** — the BC $O(T^2)$ lower bound; the rigorous mathematical root of distribution shift
+- **Ross, Gordon & Bagnell, "A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning" (AISTATS 2011)** — DAgger original paper, gives the $O(T)$ linear upper bound and the $\beta$-mixing schedule; foundational for IL
 - **Ho & Ermon, "Generative Adversarial Imitation Learning" (2016)** — GAIL paper, unifying IRL + RL with a GAN framework, an important milestone in modern IL
 - **Zhao et al., "Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware" (2023)** — ACT (Action Chunking with Transformers) paper, breakthrough results on bimanual manipulation with action chunking + Transformer
 - **Chi et al., "Diffusion Policy: Visuomotor Policy Learning via Action Diffusion" (2023)** — Diffusion Policy paper, using diffusion models for policy representation, solving multi-modal action problems

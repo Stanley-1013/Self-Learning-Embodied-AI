@@ -31,7 +31,7 @@ sidebar_position: 21
 
 **Residual Learning**: $u = u_{\text{model}} + u_{\text{residual\_NN}}$ — an analytical model (rigid-body dynamics, PID controller) handles the 90% that can be modeled, while a small NN learns only the 10% residual (nonlinear friction, compliance). **Engineering advantage**: the analytical part provides a safe baseline + interpretability; the NN part can be small and fast.
 
-**Teacher-Student Distillation**: train a Teacher policy in sim with access to **privileged information** (exact contact forces, object mass, friction coefficients), then train a Student policy that uses only **real-robot-observable quantities** (camera, joint encoders) to imitate the Teacher's behavior. The **information bottleneck** forces the Student to **implicitly infer** physical parameters from observation history.
+**Teacher-Student Distillation**: train a Teacher policy in sim with access to **privileged information** (exact contact forces, object mass, friction coefficients), then train a Student policy that uses only **real-robot-observable quantities** (camera, joint encoders) to imitate the Teacher's behavior — the key is that the Student imitates the Teacher using only deployable observation modalities (Chen et al. 2020 "Learning by Cheating" privileged-learning framework). In locomotion (Lee et al. 2020, Miki et al. 2022) the Student is commonly a history + RNN/LSTM network that **implicitly infers** physics parameters, but that is a design choice, not the definition — other tasks can use a one-step feedforward Student.
 
 **Location in the Sense → Plan → Control Loop**:
 - **Input**: sim-trained policy + real-robot sensor data
@@ -426,7 +426,7 @@ def update_mujoco_xml(xml_path, identified_params):
 
 **Complete reasoning chain**:
 
-1. **Check latency first**: MuJoCo defaults to 0 ms actuator delay; the real UR5 has ~8 ms control delay + communication latency. Add 8 ms delay in sim and retest success rate → if it drops to 50%, latency is the dominant factor
+1. **Check latency first**: MuJoCo defaults to 0 ms actuator delay; the real UR5's RTDE servoJ cycle alone is ~8 ms (125 Hz), but once you add the ROS / network / controller pipeline, end-to-end latency is typically 20–40 ms. Sweep a range of 8–40 ms delay in sim and retest success rate → if it drops to 50%, latency is the dominant factor (do not set your DR delay range to just 8 ms — that is only the lower bound)
 2. **Check friction next**: MuJoCo default friction vs the real gripper's actual friction may differ by 2-3x. Observe whether the object slips in the gripper on hardware → if yes, reduce friction in sim and retest
 3. **Check noise**: real RGB cameras have color bias and motion blur; joint encoders have quantization noise. Add corresponding noise models in sim
 4. **Add gap sources one by one**: record success rate after each addition to identify the **largest contributor**
@@ -512,7 +512,8 @@ def update_mujoco_xml(xml_path, identified_params):
 - **OpenAI, *Solving Rubik's Cube with a Robot Hand* (2019)** — the canonical ADR application, showing how bounds automatically expand from narrow to extreme physical variation; the best case study for understanding why DR ranges cannot be set manually
 - **Tobin et al., *Domain Randomization for Transferring Deep Neural Networks from Simulation to the Real World* (2017)** — the foundational DR paper, defining the basic framework for visual and physics DR
 - **Rusu et al., *Sim-to-Real Robot Learning from Pixels with Progressive Nets* (2017)** — progressive neural networks for sim-to-real transfer; useful for understanding non-DR alternatives
-- **ETH Zurich, *Learning to Walk in Minutes Using Massively Parallel Deep RL* (2022)** — Teacher-Student + IsaacGym massive parallel training, complete pipeline from sim to the ANYmal quadruped robot
+- **Rudin et al. (ETH Zurich), *Learning to Walk in Minutes Using Massively Parallel Deep RL* (CoRL 2021)** — Isaac Gym massively parallel PPO + DR on the ANYmal quadruped; the full parallel-RL pipeline. Note: this is a parallel-RL / DR paper, **not a Teacher-Student paper**
+- **Lee et al., *Learning quadrupedal locomotion over challenging terrain* (Science Robotics 2020)** / **Miki et al., *Learning robust perceptive locomotion for quadrupedal robots in the wild* (Science Robotics 2022)** — the canonical Teacher-Student + LSTM implicit physics-inference papers; the milestone ANYmal real-world deployments
 - ***Embodied AI Algorithm Engineer Interview Questions*, Ch9 Sim-to-Real** — covers high-frequency interview questions on DR / SysID / DA in situational format
 - **Zhao et al., *Sim-to-Real Transfer in Deep Reinforcement Learning for Robotics: a Survey* (2020)** — the most comprehensive survey, categorizing all sim-to-real strategies with their applicable scenarios
 - **Isaac Gym / IsaacLab official docs** — engineering guide for massive parallel DR training, with DR parameter configuration examples

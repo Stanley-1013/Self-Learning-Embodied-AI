@@ -43,6 +43,8 @@ $$
 \dot{q} = J^+(q)\,\dot{x}, \quad J^+ = J^T(JJ^T)^{-1}
 $$
 
+（此為 **right pseudo-inverse**，適用 $n \geq 6$ 且 $J$ 行滿秩的情境；若任務維度 > DoF 的罕見情況要改用 left pseudo-inverse $(J^T J)^{-1} J^T$，或直接用 SVD 形式 $J^+ = V \Sigma^+ U^T$ 作為通式。）
+
 **物理意義**：在所有能達成末端速度 $\dot{x}$ 的關節速度中，偽逆挑出 $\|\dot{q}\|$ 最小的那組——用最少的關節運動達成任務。但 $JJ^T$ 接近奇異時，$(JJ^T)^{-1}$ 爆掉。
 
 3. **Damped Least Squares (DLS)**（穿越奇異點的穩定解）：
@@ -99,7 +101,7 @@ $$
 從這裡可以清楚看到：$\sigma_i \to 0$ 時 $1/\sigma_i \to \infty$，關節速度會爆掉——這就是奇異點的數學根源。
 
 **6-DoF 手臂的典型奇異構型**：
-- **腕部奇異 (wrist singularity)**：第 4、6 軸共線 → 繞腕部的旋轉自由度退化
+- **腕部奇異 (wrist singularity)**：第 4、6 軸共線（spherical wrist 在 $\theta_5 = 0$ 時發生）→ 繞腕部的旋轉自由度退化
 - **肩部奇異 (shoulder singularity)**：末端位於肩部球面邊界 → 機械臂完全伸直，無法再往外推
 - **肘部奇異 (elbow singularity)**：第 2、3 軸使手臂完全摺疊或伸直 → 平面內運動自由度丟失
 
@@ -129,10 +131,12 @@ $$
 ```
 while ||x_current - x_desired|| > tol:
     e = x_desired - FK(q)
-    dq = J_dls(q)^(-1) * e      // DLS 或牛頓法
-    q = q + alpha * dq           // alpha: step size
+    dq = J(q)^T * inv(J(q) * J(q)^T + lambda^2 * I) * e   // DLS: 實際解的完整形式
+    q = q + alpha * dq                                      // alpha: step size
     enforce_joint_limits(q)
 ```
+
+（DLS 並非對某個 `J_dls` 矩陣求逆；上式的右半部就是阻尼最小平方解。）
 
 **優勢**：通用、不需特殊構型、可加 joint limits / obstacle 約束
 **劣勢**：可能陷入局部最優、需好的初值、收斂速度不保證

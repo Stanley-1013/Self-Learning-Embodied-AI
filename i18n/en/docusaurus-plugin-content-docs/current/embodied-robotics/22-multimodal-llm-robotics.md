@@ -43,7 +43,7 @@ $$
 a_t = \text{Detokenize}\left( \arg\max_{a \in \mathcal{V}_a} P_\theta(a \mid I_t, l, a_{<t}) \right)
 $$
 
-**Physical meaning**: continuous robot actions (7-DoF end-effector pose) are discretized into tokens sharing the same vocabulary as language tokens. The model's output is "the next token," except this token is decoded as an action rather than text. RT-2 uses 256 bins to discretize each dimension.
+**Physical meaning**: continuous robot actions (7-DoF end-effector pose) are discretized into tokens sharing the same vocabulary as language tokens. The model's output is "the next token," except this token is decoded as an action rather than text. RT-2 uses 256 bins per dimension and **reuses the 256 least-frequent tokens from the pretrained VLM vocabulary as action tokens** (no new tokens added; the Transformer head is shared) — this is the key trick letting VLAs inherit VLM pretraining weights unchanged.
 
 2. **Frequency separation in hierarchical architecture**:
 
@@ -79,12 +79,13 @@ $$
 
 The gap is 3-4 orders of magnitude. This is why VLAs must fine-tune from pre-trained VLMs rather than training from scratch.
 
-### Scaling trends
+### Scaling observations (empirical, not a formal law)
 
-Google RT-2 experiments show:
-- Model scaling from 5B → 55B parameters: zero-shot novel object generalization improves ~3x
-- Data scaling from 10K → 130K episodes: success rate rises from 40% → 75%
-- But data acquisition speed (real-robot operation) is linear, unlike text which can be crawled from the web
+RT-2 / OpenVLA report two qualitative trends; there is **no verified closed-form VLA scaling law** (nothing like Kaplan/Chinchilla for LLMs):
+
+- **Model scaling**: RT-2 compares several VLM backbones (PaLM-E 12B, PaLI-X 5B, PaLI-X 55B). Larger backbones are clearly better on emergent / unseen tasks, but the paper reports absolute percentage-point deltas on individual task buckets (e.g. +20–30 pp on certain unseen-object categories), **not a clean "3×" multiplier or a continuous scaling curve**
+- **Data scaling**: going from tens of thousands to ~130K real-robot episodes lifts in-distribution success rate significantly; generalization to unseen objects comes mostly from the VLM pretraining, not from more robot data
+- **Structural bottleneck**: real-robot data collection is linear (~100–200 episodes/day per robot); even Open X-Embodiment's 22-institution collaboration only reached ~1M, still tiny by LLM standards
 
 ### Solutions for data efficiency
 
@@ -391,7 +392,7 @@ class OctoInference:
 - **Brohan et al., "RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control" (2023)** — the VLA milestone paper, proving that fine-tuning a VLM into an action predictor is viable; the 55B model's zero-shot generalization is remarkable
 - **Ahn et al., "Do As I Can, Not As I Say: Grounding Language in Robotic Affordances (SayCan)" (2022)** — the canonical LLM + affordance grounding architecture, solving the core problem of infeasible LLM plans
 - **Octo (UC Berkeley, 2024)** — open-source VLA model supporting fine-tuning to your robot; the best starting point for learning VLA engineering
-- **OpenVLA (Stanford, 2024)** — Llama-based open-source VLA, 7B parameters, demonstrating the feasibility of using open-source LLMs for VLA
+- **OpenVLA (Stanford + UC Berkeley + TRI + MIT + Google DeepMind, 2024)** — Kim et al.'s multi-institution collaboration, an open-source VLA built on Llama 2 7B, demonstrating the feasibility of open-source LLMs as VLA backbones
 - **Hafner et al., "DreamerV3" (2023)** — state-of-the-art world model, model-based RL in latent space, demonstrating world model potential in both sim and real
 - **Liang et al., "Code as Policies" (2023)** — using LLMs to generate Python code as robot policies, eliminating skill pre-definition; highly flexible but requires strict sandboxing
 - **Open X-Embodiment Collaboration (2024)** — 22 institutions, multiple robots, joint dataset proving cross-embodiment transfer is viable; laying the data foundation for VLA scaling

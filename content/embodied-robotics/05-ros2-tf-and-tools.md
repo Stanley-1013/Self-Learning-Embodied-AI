@@ -27,13 +27,13 @@ sidebar_position: 5
 
 | Frame | 意義 | 特性 |
 |-------|------|------|
-| `earth` | 地球固定座標 | 多機器人系統使用，考慮地球曲率 |
+| `earth` | 地球固定座標（ECEF） | 多機器人系統使用，用來關聯多個 `map` frame |
 | `map` | 全域固定座標 | 由 SLAM/定位演算法維護，**不連續但長期精確** |
 | `odom` | 里程計座標 | **連續平滑但會漂移**，由 wheel odometry / VIO 維護 |
 | `base_link` | 機器人底座 | 剛性固定在機器人上 |
 | `camera_link` / `lidar_link` | 感測器座標 | 通常透過 static TF 固定到 `base_link` |
 
-命名慣例：`earth → map → odom → base_link → sensor_link`，**資料永遠從 parent 流向 child**。
+命名慣例：`earth → map → odom → base_link → sensor_link`。**TF 廣播方向**是 parent 發布 child 的相對姿態（`header.frame_id=parent, child_frame_id=child`，數學上記作 $T^{parent}_{child}$）；而**座標轉換方向**則相反 — 把 child frame 的點乘上 $T^{parent}_{child}$ 才會得到它在 parent frame 下的座標。
 
 ### Static TF vs Dynamic TF
 
@@ -375,7 +375,7 @@ public:
 
 ## 常見誤解
 
-1. **parent ↔ child 搞反** — `header.frame_id` 是 **parent**（「我在誰的座標下」），`child_frame_id` 是 child。搞反的症狀：rviz 裡模型跑到地圖的鏡像位置或翻轉。**記法**：parent 是更「大」的座標系（map > odom > base_link），資料從大流向小。
+1. **parent ↔ child 搞反** — `header.frame_id` 是 **parent**（child 姿態是表達在誰的座標下），`child_frame_id` 是 child。搞反的症狀：rviz 裡模型跑到地圖的鏡像位置或翻轉。**記法**：REP-105 的階層是 `map → odom → base_link → sensor_link`，發布時永遠把左邊那個當 parent、右邊那個當 child；讀 $T^{parent}_{child}$ 時順序是「右到左」— 把 source（child）frame 的點映射到 target（parent）frame。
 
 2. **查詢用 `now()` 但 Buffer 還沒收到** — `lookup_transform(..., self.get_clock().now())` 查的是「精確這個時刻」的 TF，但因為網路延遲和發布頻率，Buffer 裡可能還沒有這個時刻的資料 → `ExtrapolationException`。**正確做法**：用 `rclpy.time.Time()` 即 `Time(0)`，意思是「Buffer 中最新可用的 transform」。需要精確時間同步時才用具體時間戳 + 足夠的 timeout。
 
@@ -466,7 +466,7 @@ public:
 
 1. **map vs odom 的設計哲學** — 這是 ROS 導航最核心的架構問題。面試時帶出：「map frame 由 SLAM 維護，長期全域精確但會跳動；odom frame 由里程計維護，短期平滑但會漂移。把兩者分開讓控制層可以依賴平滑的 odom 做反應式避障，而規劃層用精確的 map 做全域路徑規劃 — 各取所長。」
 
-2. **四元數 vs 歐拉角** — 面試常考為什麼 TF 用四元數。帶出：「歐拉角有 Gimbal Lock、插值不均勻；四元數 4 個參數、SLERP 插值平滑、連乘高效。實務上用 `setRPY()` 做人類可讀的設定，底層全部用四元數表示和運算。」
+2. **四元數 vs 歐拉角** — 面試常考為什麼 TF 用四元數。帶出：「歐拉角有 Gimbal Lock、插值不均勻；四元數沒有 Gimbal Lock、SLERP 插值平滑、只用 4 個參數（比旋轉矩陣 9 個省一半）、重新正規化成本低。實務上用 `setRPY()` 做人類可讀的設定，底層全部用四元數表示和運算。」
 
 3. **lookup 一定要包 try-catch** — 測的是工程嚴謹度。帶出：「TF lookup 可能因為 Buffer 尚未收到資料、時間超出 Buffer 範圍、或 frame 不存在而拋異常。production code 絕對要用 try-catch 或 `canTransform` 先檢查，否則一個遺漏就讓整個 node crash。」
 
