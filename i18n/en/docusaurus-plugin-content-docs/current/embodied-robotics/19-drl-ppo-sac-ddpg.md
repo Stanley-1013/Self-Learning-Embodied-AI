@@ -112,7 +112,7 @@ DQN (2013, DeepMind)
   └─ Problem: discrete actions only
     │ Continuous action space → Actor outputs directly
     ▼
-DDPG (2015, DeepMind)
+DDPG (Lillicrap et al., arXiv 2015 / ICLR 2016, DeepMind)
   ├─ Deterministic Actor μ(s) + Critic Q(s,a)
   ├─ OU noise for exploration
   ├─ Soft target update: θ' ← τθ + (1-τ)θ'

@@ -112,7 +112,7 @@ DQN (2013, DeepMind)
   └─ 問題：只能離散動作
     │ 連續動作空間 → 用 Actor 直接輸出
     ▼
-DDPG (2015, DeepMind)
+DDPG (Lillicrap et al., arXiv 2015 / ICLR 2016, DeepMind)
   ├─ 確定性 Actor μ(s) + Critic Q(s,a)
   ├─ OU 噪聲探索
   ├─ Soft target update: θ' ← τθ + (1-τ)θ'
