@@ -288,3 +288,85 @@
 13. **Frenet 座標系 Conformal Lattice**：公路自駕規劃黃金標準
 14. **Diffuser 多峰分佈 vs RL 取平均撞牆**：為什麼生成式模型適合規劃
 15. **Learning + Traditional 混合**：Proposal/Heuristic 而非取代，面試關於 AI 落地的成熟回答
+
+## Q4 補強（Local Planner 三巨頭 + Multi-robot + 3D Aerial）
+
+### 情境題 J：DWA / TEB / MPPI 三巨頭
+- **DWA**：速度空間 (v, ω) 採樣 → Cost = α·heading + β·distance + γ·velocity
+  - **局部極小陷阱**：短視 (myopic) + 只前瞻 1-2 秒 → U 型障礙/死胡同原地打轉
+- **TEB**：Global path 視為 time-parameterized elastic band
+  - ΔT 作為決策變數 → 非線性優化 (G2O) 整合避障 + 時間最佳化 + 動力學
+  - **對動態行人更魯棒**：可預測 t 秒後行人位置 + 時空圖中彎曲繞開 + 減速等待（拉長 ΔT）
+  - DWA 只對當下瞬間靜態切片反應
+- **MPPI**（Sampling-based MPC 極致）：
+  - GPU 並行萬條隨機控制軌跡
+  - **非光滑 cost 友善**：TEB 依賴 G2O 梯度下降，離散網格/階躍碰撞懲罰會發散；MPPI 只評估軌跡最終代價積分不需求導
+- **ROS 2 Nav2 三 controller**：DWB、TEB local_planner、MPPI Controller
+- **場景選型**（面試必答）：
+  - **室內窄道** → **TEB**（DWA 採樣有效軌跡極少易卡）
+  - **人流密集** → TEB 或 MPPI（時空預測）
+  - **非結構化越野** → **MPPI**（底盤滑移 + 懸崖非光滑代價）
+
+### 情境題 K：Multi-robot Path Planning（MAPF / CBS / Swarm）
+- **MAPF 定義**：n 個 agent 共享圖；任意 t 無頂點衝突（Vertex Conflict）/ 無邊衝突（Edge Conflict）；總代價 (Makespan 或 Sum-of-Costs) 最小
+- **CBS (Conflict-Based Search)** 兩層架構：
+  - **Low-level**：每 agent 各跑 A* 找最短路，完全無視別人
+  - **High-level**：建衝突樹 (Conflict Tree)
+    - A, B 在 t 時刻都在 v 撞車 → 分岔兩子節點
+    - 左：「A 在 t 禁止出現在 v」；右：「B 在 t 禁止出現在 v」
+    - Low-level 帶新約束重跑 A*
+  - **全局最優且完備**
+- **Dense Warehouse 次優解**（衝突樹指數爆炸時）：
+  - **Priority Planning**：AGV 排序；先規劃者的軌跡當動態障礙物讓後面避開 → 解耦計算，快但非最優
+  - **Push-and-Swap**：兩車走廊相遇 → A 讓 B 退空位 (Swap) → B 通過 → A 繼續
+- **Swarm / 無人機群 ORCA**：O(1) 極速反應；速度空間算避碰半平面；兩機各承擔 50% 避讓責任
+- **ORCA 半平面約束**：`(v_A - (v_A^opt + u/2)) · n ≥ 0`
+- **NP-hard vs 百台落地的答題**：
+  - **降維打擊 + 次優妥協**：
+    1. 人為加「交通規則」（單行道、十字紅綠燈）減少迎面衝突
+    2. Priority Planning 解耦計算
+    3. 底層 ORCA / MPC 處理突發微小衝突
+  - 不求理論最優，只求 100ms 內無碰撞次優
+- **平台**：Amazon Kiva、Alibaba Cainiao、自駕隊列 Platooning
+
+### 情境題 L：3D Aerial / Rough-Terrain Planning
+- **3D 維度災難**：
+  - Occupancy Grid 記憶體爆炸
+  - **OctoMap**（八叉樹）：空/實合併，O(log n) 查詢
+  - **TSDF**：3D 視覺重建（KinectFusion），只保留表面附近距離
+  - **ESDF (Euclidean Signed Distance Field)** **規劃最重要**：任意點到最近障礙的歐氏距離；`∇ESDF` 直接指向「最快遠離障礙」方向
+- **Fast-Planner / EGO-Planner (HKUST 高飛)**：
+  - A* 或 JPS 找幾何路徑 → **B-spline 參數化軌跡**
+  - ESDF 懲罰 + 速度/加速度動力學懲罰 → NLopt 優化器把粗糙軌跡「推」成平滑避障最優
+  - **EGO-Planner 突破**：拋棄全局 ESDF；只在碰撞軌跡段用障礙物表面法向量生成局部懲罰梯度 → 速度 ×10
+- **B-spline 軌跡優化 Cost**：
+  - `J = λ_s·J_s + λ_c·J_c + λ_d·J_d`
+  - J_s 平滑度（控制點二階差分）
+  - J_c 防撞（ESDF 推遠）
+  - J_d 動力學（速度/加速度極限）
+- **四足/人形 Rough Terrain**：
+  - 2.5D **Elevation Map**（高程圖）分析法向量 + 粗糙度
+  - **質心導航規劃**（避開大石）+ **Foothold Planner 落腳點**（質心軌跡兩側找平坦無干涉踩踏點）
+- **平台**：DJI Mavic APAS 避障、Unitree H1 人形 rough terrain、ANYmal 碎石行走
+- **3D vs 2D 難度跳躍答題**：
+  - **維度災難**：狀態從 `(x,y,θ)` 變 `SE(3) × ℝ³`（位姿+線/角速度）→ A* 節點立方爆炸
+  - **欠驅動動力學**：無人機無剎車，必須傾斜機身（Roll/Pitch）產生反向推力
+  - 3D 規劃**必須將微分平坦性 + 動力學約束深度耦合進軌跡優化**
+  - 這就是 Fast-Planner 用 B-spline 梯度優化的本質
+
+### 面試 talking points（Q4）
+16. **DWA 短視陷阱 + TEB 時空預測**：面試最常問的 Local Planner 本質差異
+17. **MPPI 非光滑 cost 友善**：越野/不可微代價場景的殺手級選型
+18. **CBS 衝突樹 + Priority Planning 降維**：MAPF 從理論到落地的標準答案
+19. **ORCA 半平面各承擔 50%**：Swarm 分散式避碰的 O(1) 核心
+20. **ESDF 梯度引導 3D 軌跡優化**：無人機規劃面試的硬核詞彙
+21. **2.5D Elevation Map + Foothold Planner**：四足 rough terrain 標準架構
+
+## 備註
+Ch10 完成 4 queries × ~3 sub-topics = 12 sub-topics，總體深度已達 A 級：
+- Q1 Search-based (A*/Theta*/D* Lite/Costmap)
+- Q2 Sampling-based (RRT/PRM/RRT*/Informed/BIT*/high-dim)
+- Q3 Kinodynamic (Dubins/Reeds-Shepp) + Lattice + Learning (Diffuser/NeRF/CVAE)
+- Q4 Local (DWA/TEB/MPPI) + Multi-robot (MAPF/CBS/ORCA) + 3D (OctoMap/ESDF/Fast-Planner/Rough Terrain)
+
+若要嚴格對齊「5 queries 獨立」，可再補 Q5 深掘單一主題（如 POMDP-based planning for partially observable envs）。但現有 12 sub-topics 深度已超過 A 級典型 5 queries 的覆蓋廣度。
