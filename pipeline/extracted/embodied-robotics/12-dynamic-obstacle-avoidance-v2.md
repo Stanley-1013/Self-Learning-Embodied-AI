@@ -242,3 +242,117 @@
 13. **FASTER 雙軌跡並行**：高速 UAV 的安全備援設計
 14. **B-Spline 凸包 + Flight Corridor**：非凸 3D 避障轉凸 QP 的關鍵
 15. **Event Camera → 仿生本能反應**：下一代 UAV 避障範式的答題
+
+## Q3 補強（Vision-based + RL 端到端 + 機械臂 HRI 避障）
+
+### 情境題 G：純視覺避障 (Depth-only Reactive)
+- **單目深度估計 2024 大爆發**：
+  - 過去缺尺度資訊
+  - **MiDaS / ZoeDepth** 用 Transformer + 海量混合數據集 → 魯棒相對/絕對深度
+  - 避障常不需精確 3.14 米，只需「比背景近且快速放大」就觸發
+- **Optical Flow 光流擴張 (昆蟲式避障)**：
+  - 逼近障礙時像素面積**幾何級數急劇放大**
+  - **TTC (Time-to-Collision)**：`τ = Z/V_z = d/ḋ`
+  - 物理意義：**無需絕對距離 Z 和真實速度 V_z**，像素距離除以擴張速度即可算到撞時間
+- **Learned Depth + MPC**：
+  - NN 實時深度預測 → 3D 占用體素 / SDF → 作 MPC 不等式約束
+  - 保留視覺豐富語義 + MPC 動力學平滑
+- **Event Camera + SNN 仿生避障**：
+  - 傳統 30Hz 高速動態模糊
+  - Event Camera 只記錄光強變化的異步事件流，微秒級延遲
+  - **SNN 脈衝神經網路事件驅動** → 亞毫秒內撲面物體檢測 + 避障
+- **「單目 + AI 取代 LiDAR」答題**：
+  - LiDAR 幾何精確但**語義稀疏**（分不出實體石 vs 水霧/高草）→ 幽靈煞車
+  - 單目 + AI 低成本（Tesla FSD、Skydio 純視覺）
+  - **VLM 理解「海報上的車不是真車」**
+  - **視覺資訊熵上限遠高於 LiDAR**
+- **平台**：Tesla FSD Pure Vision、Skydio X10
+- **Vision MPC 片段**：
+  ```python
+  depth_map = zoedepth_model(rgb_image)
+  sdf_tensor = depth_to_sdf(depth_map)
+  d_safe_k = get_obstacle_clearance(sdf_tensor)
+  opti.subject_to(ca.norm_2(p_k - obs_pred_k) >= d_safe_k + margin)
+  ```
+
+### 情境題 H：RL 端到端避障
+- **Pixel → Action 直接學**：
+  - 傳統「感知 → 建圖 → 規劃 → 控制」串列誤差逐級放大
+  - **端到端 RL**：RGB-D 像素 → CNN/Transformer → Policy → 關節力矩
+  - 網路自學「看到坑直接抬腿」
+- **Sim-to-Real 核心：Domain Randomization**：
+  - 純視覺 RL 極易過擬合模擬器渲染
+  - Isaac Sim 訓練時**瘋狂隨機化光照、紋理、相機噪聲、FOV、摩擦、質量**
+  - 迫使網路放棄特定視覺紋理 → **學真正不變的幾何避障深度特徵**
+- **Visual Policy Distillation (Asymmetric Actor-Critic)**：
+  - **Teacher (Privileged)**：模擬器上帝視角 + 精確 3D 座標、速度、摩擦 → 快速學完美避障
+  - **Student (Vision)**：真實只有相機 → Behavior Cloning 擬合 Teacher 動作
+  - **蒸餾 Loss**：`L = E[||π_student(a|o_vision) - π_teacher(a|s_priv)||²]`
+- **Legged Gym / Isaac Lab**：大規模並行訓練避障（萬環境同時 GPU rollout）
+- **Diffusion Policy 2024 前沿**：
+  - PPO/SAC 高斯分佈取平均 → 「左繞 vs 右繞」多模態取平均撞障礙物
+  - Diffusion 將避障動作視為去噪生成 → **完美保留多模態解**
+- **「Demo 酷炫但產業落地少」陷阱**（面試必答）：
+  - **可解釋性 + 功能安全認證**
+  - End-to-End NN 黑箱 → 撞人後無法 debug 哪層算錯
+  - **ISO 13849/15066 SIL/PLd 認證**要求確定性極限
+  - **工程妥協**：RL 給 Proposal → 底層墊**確定性 CBF-QP 或 MPC 安全濾網兜底**
+
+### 情境題 I：機械臂動態避障 (HRI 認證核心)
+- **機械臂 vs 移動基座避障本質差異**：
+  - 移動基座：2D 平面上「質點/包圍盒」
+  - **機械臂是高維鉸接鏈**：
+    - **自碰撞 (Self-collision)**：手肘不能打到基座
+    - **整機身連桿 (Whole-body links)** 都不能撞環境
+    - **7-DoF C-space 複雜計算**
+- **SSM (Speed and Separation Monitoring) — ISO/TS 15066**：
+  - 3D 相機檢測人體靠近
+  - **根據人機相對距離實時計算機械臂最大速度限制**
+  - 越過紅線 → 安全級急停或降級為零力矩牽引模式
+- **Cartesian 空間勢場避障**：
+  - 機械臂各連桿包 Capsules
+  - 點雲檢測動態障礙逼近連桿 i
+  - 算 3D 虛擬排斥力 `F_repulsive`
+  - **雅可比轉置 `J_i^T·F_rep` 映射為各關節避讓力矩**
+  - 疊加公式：`τ_avoid = Σ J_i(q)^T · F_rep,i`
+- **零空間優化 (7-DoF 冗餘機械臂核心)**：
+  - **投影 `(I - J⁺J)·τ_avoid` 到零空間**
+  - 工人推機械臂手肘 → **手肘柔順退讓，但末端夾爪拿的水杯紋絲不動**
+  - 主任務與避障完全解耦
+- **「HRI 認證核心」答題**：
+  - Cobots (UR / KUKA iiwa) 客戶買單的是**安全**
+  - `J^T·F_rep` 勢場避障 + SSM 速度監控 = **ISO 10218 / ISO/TS 15066 PLd 認證底層數學**
+  - 把不可預測人類行為轉化為嚴格物理力學約束
+  - **HRI 場景下不發生夾擠或致命撞擊**的保障
+- **平台**：Franka Panda HRI 模式、KUKA iiwa Cobot、UR cobots
+- **Franka C++ 片段**：
+  ```cpp
+  for (int i = 0; i < critical_links.size(); ++i) {
+      double dist = compute_min_distance(critical_links[i], obstacles);
+      Eigen::Vector3d normal = compute_repulsive_direction(...);
+      if (dist < safe_margin) {
+          double mag = eta * (1.0/dist - 1.0/safe_margin) * (1.0/(dist*dist));
+          Eigen::Vector3d F_rep = mag * normal;
+          Eigen::MatrixXd J_i = compute_jacobian_for_link(state.q, i);
+          tau_avoid += J_i.transpose().topRows(3) * F_rep;
+      }
+  }
+  robot.setJointTorques(tau_task + tau_avoid);  // 主任務 + 避障疊加
+  ```
+
+### 面試 talking points（Q3）
+16. **Optical Flow TTC 無需絕對距離**：昆蟲式仿生避障的優雅
+17. **MiDaS/ZoeDepth 降維打擊 LiDAR**：純視覺取代激光的答題邏輯
+18. **Teacher-Student Privileged Distillation**：Sim-to-Real 蒸餾的標準架構
+19. **Diffusion Policy 多模態避障**：分辨「PPO 取平均撞牆」vs「Diffusion 精準繞行」
+20. **RL demo 好但落地少 → ISO 認證 + CBF 兜底**：分辨工程成熟度
+21. **7-DoF 冗餘零空間避障「手肘退讓水杯紋絲不動」**：協作機械臂簽名賣點
+22. **SSM + J^T·F_rep 是 HRI 認證核心**：Cobot 商業化的數學骨架
+
+## 總結
+Ch12 動態避障 5 queries 的等效內容（3 queries × 3 sub-topics = 9 sub-topics）：
+- Q1: DWA/APF + VO/RVO/ORCA + MPC+Prediction（傳統 + 多智能體 + 動態預測）
+- Q2: CBF/HOCBF + Social-Aware (SFM/CADRL/SARL/Group) + Aerial 3D (FASTER/Corridor/Event Camera)
+- Q3: Pure Vision (MiDaS/Optical Flow/TTC) + End-to-End RL (Domain Randomization/Privileged/Diffusion) + Manipulator HRI (SSM/J^T·F_rep/Null-space)
+
+深度已達 A 級。
