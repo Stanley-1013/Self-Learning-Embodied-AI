@@ -257,7 +257,7 @@ $$
 \text{s.t. } W \cdot F_c \geq 0
 $$
 
-**為何是具身智能潛規則**：Tesla Optimus / Figure / Unitree H1 的多接觸操作（雙手抱箱 + 雙腳站立）底層 100% 依賴 CWC-QP。
+**為何是具身智能的主流骨架**：多接觸操作（雙手抱箱 + 雙腳站立）在 ETH ANYmal / MIT Cheetah 公開論文中都以 CWC-QP 為底層；Tesla Optimus / Figure / Unitree H1 未公開完整細節，但社群廣泛推測走類似路線。
 
 **斜坡陷阱**：若未把 CWC 從世界系旋轉到局部接觸面系 → 法向力估計錯誤 → 啟動瞬間打滑劈腿。
 
@@ -788,11 +788,11 @@ Collocation 把動力學轉等式約束：$x_{k+1} - x_k - f(x_{k+1}, u_k) \cdot
 
 6. **浮動基座 Underactuated + 角動量守恆** — humanoid / quadruped 的核心。**帶出**：「基座 6 DoF 沒馬達，機器人只能靠 GRF 改基座加速度 — 這是 Underactuated Dynamics。空中飛行相重力不產生力矩，**總角動量嚴格守恆** — 貓翻正、後空翻都是這條。WBC 必須在落地時約束 $\dot{k}_{\text{des}}$，否則俯仰力矩失控就摔。」
 
-7. **CWC 超越 ZMP，多接觸的 QP 統一約束** — 現代 WBC 基石。**帶出**：「ZMP 假設共水平面 + 無限摩擦，3D 多接觸（扶牆+踩階）直接失效。CWC 統一四類約束：法向壓力、摩擦錐、CoP、yaw torque，線性化成多面體錐給 QP 求最優接觸力。Tesla Optimus / Figure 的底層 100% 是 CWC-QP。」
+7. **CWC 超越 ZMP，多接觸的 QP 統一約束** — 現代 WBC 基石。**帶出**：「ZMP 假設共水平面 + 無限摩擦，3D 多接觸（扶牆+踩階）直接失效。CWC 統一四類約束：法向壓力、摩擦錐、CoP、yaw torque，線性化成多面體錐給 QP 求最優接觸力。ETH ANYmal / MIT Cheetah 公開論文採用此架構，人形機器人公司（Tesla Optimus / Figure）未公開細節但推測路線類似。」
 
 8. **Teacher-Student Privileged Learning** — 具身 AI 的 sim-to-real 公式。**帶出**：「ANYmal / Boston Dynamics 路線：Teacher 在模擬器讀 privileged（μ、質量、地形），Student 只用 proprioception + RNN 從『打滑歷史』隱式推估摩擦。這樣做比單純 Domain Randomization 強，因為 Student 真的在線上學會『感覺』地面，而不是對著隨機化邊界調保守策略。」
 
-9. **Differentiable Simulators + 大腦 RL + 小腦 WBC 混合架構** — 下一代具身 AI。**帶出**：「MuJoCo MJX / Brax / Dojo 讓 `∂s/∂a` 穿透物理引擎，REINFORCE 的高方差變精確梯度，sample efficiency ×100。進一步：RL action space 不直接輸出力矩，而是期望質心加速度或阻抗 $\Delta K/D$，底層交 WBC/CWC-QP。大腦 RL 做決策、小腦 WBC 做動力學可行性，這是 Tesla / Figure 的路線。」
+9. **Differentiable Simulators + 大腦 RL + 小腦 WBC 混合架構** — 下一代具身 AI。**帶出**：「MuJoCo MJX / Brax / Dojo 讓 `∂s/∂a` 穿透物理引擎，REINFORCE 的高方差變精確梯度，sample efficiency ×100。進一步：RL action space 不直接輸出力矩，而是期望質心加速度或阻抗 $\Delta K/D$，底層交 WBC/CWC-QP。大腦 RL 做決策、小腦 WBC 做動力學可行性，這是多家人形機器人公司（Tesla / Figure 等）推測採取的路線。」
 
 10. **Non-collocated Control 的右半平面零點** — 大型柔性臂面試 signature。**帶出**：「Canadarm 1.5 噸/17 m 臂馬達在關節、精度要求在末端 — 中間巨大柔性連桿讓傳遞函數出現右半平面零點（non-minimum phase），PID 拉高增益直接發散。必須 **Input Shaping（ZV shaper 讓兩脈衝相位差 180° 互抵）+ 奇異攝動分離慢/快子系統 + LQR 狀態觀測器**。」
 

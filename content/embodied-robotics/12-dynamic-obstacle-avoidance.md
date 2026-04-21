@@ -151,12 +151,12 @@ Costmap 是連接感知與規劃的關鍵資料結構：
 
 2. **前向模擬**：對 $V$ 中離散化的每對 $(v_i, \omega_j)$，模擬 $T_{\text{sim}}$（通常 1–3 秒）的軌跡弧線
 
-3. **代價評估**：
-   - $\text{heading}$：軌跡終點朝向與目標方向的夾角（越小越好）
-   - $\text{dist}$：軌跡上離最近障礙物的最短距離（越大越好）
-   - $\text{velocity}$：前進速度大小（鼓勵快速移動）
+3. **代價評估**（兩種等價常見形式；本章**跟 Nav2 採 cost-minimization**）：
+   - $\text{heading\_cost}$：軌跡終點朝向與目標方向的夾角（差愈大成本愈高）
+   - $\text{obstacle\_cost}$：離最近障礙物距離的**倒數**（離障愈近成本愈高）
+   - $\text{velocity\_cost}$：最大速度與當前速度的差（慢愈多成本愈高）
 
-4. **選最優**：$G = \alpha \cdot \text{heading} + \beta \cdot \text{dist} + \gamma \cdot \text{velocity}$ 取最大值的 $(v^*, \omega^*)$ 下發
+4. **選最優**：$G = \alpha \cdot \text{heading\_cost} + \beta \cdot \text{obstacle\_cost} + \gamma \cdot \text{velocity\_cost}$，取**最小值**的 $(v^*, \omega^*)$ 下發（舊文獻常寫成「取最大化 reward」形式，兩者等價只差符號；Nav2 DWB 內部用 cost-minimization）
 
 **速度空間離散化**：典型 DWA 用 $30 \times 30$ 到 $50 \times 50$ 的網格。Nav2 的 DWA 實作用迭代式前向模擬，每條軌跡 20–30 個時間步。
 
@@ -1013,7 +1013,7 @@ class HierarchicalAvoidance:
 
 10. **機械臂 $\mathbf{J}^\top \mathbf{F}_{\text{rep}}$ + 零空間「手肘退讓水杯紋絲不動」是 ISO 10218 / 15066 PLd 認證的數學骨架** — Cobot 商業化的簽名賣點。**為什麼這是重點**：Cobot 客戶（UR / KUKA / Franka 使用者）買單的是**安全**，能講出認證底層數學證明你懂工業邏輯而非 toy example。**帶出**：「各連桿 Capsule 包裹，雅可比轉置把笛卡爾斥力映射為關節避讓力矩。7-DoF 冗餘投影到零空間 → 工人推手肘時手肘柔順退讓，但末端拿的水杯紋絲不動。這就是 ISO 15066 PLd 認證的底層數學。」
 
-11. **Privileged Teacher-Student 蒸餾是 Sim-to-Real 的標準範式** — 端到端 RL 避障的工業答案。**為什麼這是重點**：ETH ANYmal、Boston Dynamics Atlas 都用這架構，不會答等於落伍。**帶出**：「Teacher 在模擬器吃上帝視角（精確 3D + 摩擦）學完美避障 → Student 真實只吃相機 → Behavior Cloning 擬合 Teacher 動作。再加 Domain Randomization（瘋狂隨機化光照、紋理、噪聲）讓 Student 學幾何不變特徵，避免過擬合模擬器渲染。」
+11. **Privileged Teacher-Student 蒸餾是 Sim-to-Real 的標準範式** — 端到端 RL 避障的工業答案。**為什麼這是重點**：**ETH ANYmal** (Hwangbo 2019、Lee 2020、Miki 2022) 已公開使用此架構；Boston Dynamics Atlas 雖未公開完整技術棧但社群推測採類似路線，不會答等於落伍。**帶出**：「Teacher 在模擬器吃上帝視角（精確 3D + 摩擦）學完美避障 → Student 真實只吃相機 → Behavior Cloning 擬合 Teacher 動作。再加 Domain Randomization（瘋狂隨機化光照、紋理、噪聲）讓 Student 學幾何不變特徵，避免過擬合模擬器渲染。」
 
 12. **Diffusion Policy 避免「PPO 取平均撞牆」的多模態塌縮** — 2024 前沿必答。**為什麼這是重點**：面試官用這題篩「只讀到 2023 年論文」vs「跟得上 2024 前沿」的候選人。**帶出**：「PPO / SAC 高斯分佈取平均 → 左繞和右繞平均起來撞障礙物中央。Diffusion Policy 把避障動作視為去噪生成，完美保留多模態解。這就是 Columbia 2023 論文為什麼在機器人界爆紅。」
 

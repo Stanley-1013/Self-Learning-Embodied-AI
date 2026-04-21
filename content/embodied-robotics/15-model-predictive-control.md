@@ -1171,7 +1171,7 @@ $$
 
 **為什麼這是重點**：2025+ 具身智能業界方向；展示「業界嗅覺」的 talking point。
 
-**兩分鐘講法**：純端到端 RL 缺硬約束保證 → 過不了工業安全認證。純 MPC 處理不了 open-world 語義指令。**必然的混合體**：VLA (RT-2 / OpenVLA / π0) 高層 1–10 Hz 語義規劃 → MPC 100 Hz–1 kHz 底層追蹤 → WBC / CBF QP 絕對安全兜底。「大腦慢思考、小腦快預測、脊髓硬反射」。Tesla Optimus、Figure、1X Neo 都走這路線。
+**兩分鐘講法**：純端到端 RL 缺硬約束保證 → 過不了工業安全認證。純 MPC 處理不了 open-world 語義指令。**必然的混合體**：VLA (RT-2 / OpenVLA / π0) 高層 1–10 Hz 語義規劃 → MPC 100 Hz–1 kHz 底層追蹤 → WBC / CBF QP 絕對安全兜底。「大腦慢思考、小腦快預測、脊髓硬反射」。**Figure 02 公開採用 OpenAI VLM + 底層控制混合架構**；Tesla Optimus / 1X Neo 未公開完整技術棧，社群推測走類似分層路線。
 
 ### 13. Event-triggered MPC + SWaP 邊緣 AI
 

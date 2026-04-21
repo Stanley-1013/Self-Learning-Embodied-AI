@@ -300,7 +300,7 @@ Ad_T.topLeftCorner(3,3)     = R;                       // [ω] 區塊
 Ad_T.topRightCorner(3,3)    = Eigen::Matrix3d::Zero();
 Ad_T.bottomLeftCorner(3,3)  = skew_symmetric(p) * R;   // 力臂耦合項
 Ad_T.bottomRightCorner(3,3) = R;
-Eigen::Matrix6d K_tcp = Ad_T.transpose() * K_flange * Ad_T;  // 剛度共軛：W = Ad_T^T · W
+Eigen::Matrix6d K_tcp = Ad_T.transpose() * K_flange * Ad_T;  // 剛度 congruence：K_tcp = Ad_T^T · K_flange · Ad_T
 ```
 
 ### 操作空間慣量矩陣 $\Lambda$ 的物理直覺
@@ -854,7 +854,7 @@ def estimate_external_torque_qdd(motor_current, q, q_dot, q_ddot, K_t, N):
 
 4. **Adjoint Transform 力矩耦合陷阱 + 操作空間 Λ** — 這是 Operational Space 的精髓，分辨「讀過 Khatib 1987」的人。**帶出**：「Wrench 跨座標系轉換時，力 $f$ 平移會透過 $\hat{p}R f$ 耦合出力矩 $m$。工程師忽略這項 → 指令完全錯誤。Franka / KUKA iiwa FRI 強制 K 相對當前 TCP 定義。操作空間慣量矩陣 $\Lambda = (JM^{-1}J^T)^{-1}$ 的物理意義是『末端在當前姿態下 3D 空間的有效質量』，用手推不同方向感覺多重由 $\Lambda$ 決定。高級阻抗控制做 Λ-weighted dynamics decoupling 才能讓 $K_d=500$ 在任何姿態下表現一致。」**為什麼是重點**：能講出 Screw Theory 對偶性（Twist & Wrench 內積 = 功率）= 你懂 SE(3) 幾何基礎，不是只會拼湊公式。
 
-5. **SEA / VSA / QDD / Harmonic Drive 選型三角** — 人形機器人 / 四足時代必考。**帶出**：「選型三角是頻寬 × 衝擊 × 精度。骨科手術 0.05mm 級 → Harmonic Drive + 末端 F/T；四足走廢墟高頻地面衝擊 → SEA（實體彈簧吸收衝擊保護減速器）；人形手臂接球握手 → QDD（低減速比 6:1~9:1 + 大扭矩外轉子馬達，電流級力控無需 F/T）；研究平台需變剛度 → VSA（拮抗馬達 + 非線性凸輪，生物肌肉機械復刻）。MIT Cheetah、Tesla Optimus 選 QDD 不選 Harmonic Drive 就是為了『無 F/T 的透明力控 + 跑跳能力』。」**為什麼是重點**：能 30 秒講出 Tesla Optimus 為什麼選 QDD = 你真的讀過執行器架構論文、理解力控從硬體層到控制層的完整鏈條。
+5. **SEA / VSA / QDD / Harmonic Drive 選型三角** — 人形機器人 / 四足時代必考。**帶出**：「選型三角是頻寬 × 衝擊 × 精度。骨科手術 0.05mm 級 → Harmonic Drive + 末端 F/T；四足走廢墟高頻地面衝擊 → SEA（實體彈簧吸收衝擊保護減速器）；需透明力控 / 跑跳能力 → QDD（低減速比 6:1~9:1 + 大扭矩外轉子馬達，電流級力控無需 F/T）；研究平台需變剛度 → VSA（拮抗馬達 + 非線性凸輪，生物肌肉機械復刻）。**MIT Mini Cheetah 公開採 QDD** 實現無 F/T 透明力控；Tesla Optimus 公開展示混用 QDD + Harmonic Drive（腿部 QDD、手指 harmonic），說明選型視關節任務而定，不是一刀切。」**為什麼是重點**：能講出 QDD 的物理優勢 + 不對閉源公司做絕對化歸屬 = 你讀過執行器論文，也避開了面試官熟知的細節陷阱。
 
 6. **Variable Impedance Learning — 大腦慢思考、小腦快反射** — 這是 2023-2024 RL × 控制的前沿。**帶出**：「固定 M/D/K 遇未知剛度環境會震盪。RL 設計：State = $\{e_x, \dot{x}, F, \tau_{\text{ext}}\}$、Action = $\{\Delta K, \Delta D\}$（不輸出力矩，只輸出參數變化量）。SAC 勝 PPO 因為最大熵機制鼓勵多樣接觸探索。**必考陷阱 1：懶惰 Policy**：只獎勵誤差 → RL 學會 K 開最大僵硬 → 失去柔順，正確 reward 要加能量懲罰 $R = -\|e_x\|^2 - w\|\tau\|^2$。**必考陷阱 2：Sim-to-Real 穿模**：MuJoCo soft contact 允許穿透，RL 可能學會 K→∞ 擠進物體作弊。分層設計：RL 10 Hz 輸出 K/D，底層 C++ 1 kHz 阻抗控制 — 融合深度學習非線性適應 + 傳統控制 100% 高頻穩定保證。」**為什麼是重點**：這題是「追過前沿 paper」vs「只看教科書」的分水嶺，能講出懶惰 Policy + 穿模兩個陷阱 = 真正調過 RL 做過 Sim-to-Real。
 

@@ -505,7 +505,7 @@ void control_loop(SensorFusion& fusion) {
 <summary>Q4（進階）：團隊成員在 ROS 2 node 裡全用 seq_cst，跑在 Jetson Orin（ARM）上效能不理想。怎麼優化？</summary>
 
 **分析推理**：
-1. **效能問題定位**：用 `perf stat` 觀察 `dmb`（data memory barrier）指令數量 — seq_cst 會大量插入 DMB
+1. **效能問題定位**：用 `perf stat` 觀察 `dmb`（data memory barrier）指令數量 — **在 ARMv8 上 `DMB ISH` 只出現在 seq_cst RMW**（`fetch_add`、`exchange`、CAS），純 load/store 與 acquire/release 一樣編成 `LDAR`/`STLR`；若 perf 看到大量 DMB，表示程式裡有高頻 seq_cst RMW 值得優化
 2. **分析每個 atomic 的實際需求**：
    - 獨立計數器/統計 → 降級為 `relaxed`
    - 生產者-消費者模式（flag、index）→ 降級為 `acquire-release`

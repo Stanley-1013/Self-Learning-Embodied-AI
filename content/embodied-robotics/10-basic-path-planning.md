@@ -580,10 +580,17 @@ from typing import Optional
 def manhattan(a, b):
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
+def octile(a: tuple, b: tuple) -> float:
+    """Octile distance — admissible for 8-connected grid with √2 diagonal cost."""
+    dx = abs(a[0] - b[0])
+    dy = abs(a[1] - b[1])
+    return max(dx, dy) + (1.4142 - 1.0) * min(dx, dy)
+
 def a_star_grid(grid: np.ndarray, start: tuple, goal: tuple) -> Optional[list]:
-    """A* on 2D occupancy grid. grid[r][c]=1 means obstacle."""
+    """A* on 2D occupancy grid. grid[r][c]=1 means obstacle.
+    8-connected with √2 diagonal cost → uses Octile heuristic (Manhattan would over-estimate)."""
     rows, cols = grid.shape
-    open_set = [(manhattan(start, goal), 0, start)]
+    open_set = [(octile(start, goal), 0, start)]
     came_from = {}
     g = {start: 0}
     closed = set()
@@ -612,7 +619,7 @@ def a_star_grid(grid: np.ndarray, start: tuple, goal: tuple) -> Optional[list]:
                 if ng < g.get(nb, float('inf')):
                     g[nb] = ng
                     came_from[nb] = cur
-                    heapq.heappush(open_set, (ng + manhattan(nb, goal), ng, nb))
+                    heapq.heappush(open_set, (ng + octile(nb, goal), ng, nb))
     return None
 
 # ============ RRT* with rewiring ============
