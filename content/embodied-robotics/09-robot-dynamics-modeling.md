@@ -114,7 +114,7 @@ $$
 
 **Forward pass**（從 base → end-effector，$i = 1 \ldots n$）：
 
-> 向量 convention：以下所有向量均表達在 **frame $i$** 下；$\hat{z} = [0,0,1]^T$ 代表 joint $i$ 在其自身 frame 的旋轉軸；$R_i$ 是 frame $i-1 \to i$ 的旋轉矩陣；$r_i$ 是 frame $i-1$ 原點指向 frame $i$ 原點的向量（表達在 frame $i$）。重力透過 base pseudo-acceleration $\ddot p_0 = -g$ 注入，後續公式不再顯式列重力項。
+> 向量 convention（Featherstone / Pinocchio 標準）：**每個下標變數 $v_i$ 表達在對應的 frame $i$**（例如 $\omega_{i-1}$ 在 frame $i-1$、$\omega_i$ 在 frame $i$）；$R_i$ 是 frame $i-1 \to i$ 的旋轉矩陣（因此 $R_i^T$ 把 frame $i-1$ 的向量變換回 frame $i$）；$\hat{z} = [0,0,1]^T$ 代表 joint $i$ 自身 frame 的旋轉軸；$r_i$ 是 frame $i-1$ 原點指向 frame $i$ 原點的向量（表達在 frame $i$）。重力透過 base pseudo-acceleration $\ddot p_0 = -g$ 注入，後續公式不再顯式列重力項。
 
 $$
 \omega_i = R_i^T (\omega_{i-1} + \dot{q}_i \hat{z})
@@ -468,7 +468,7 @@ $$
 **Step 7：物理一致性校驗（LMI/SDP）**
 - 這一步是學術和工業的分水嶺
 - 純 WLS 可能解出**負質量、非正定慣性張量**（數學上最優，物理上不合法）
-- 用 Linear Matrix Inequality 約束：$m_i > 0$，$I_i \succ 0$（正定），並於 principal axes 下滿足**三角不等式** $I_{jj} + I_{kk} \geq I_{ii}$ 對所有 $\{i,j,k\}$ 的排列都成立（等價於 Souloumiac / Traversaro 的 pseudo-inertia matrix $\succeq 0$ 的 LMI 形式；註：$\text{tr}(I_i) > \lambda_{\max}$ 只是此條件的必要弱化，單獨使用會漏掉物理上不可實現的 inertia）
+- 用 Linear Matrix Inequality 約束：$m_i > 0$，$I_i \succ 0$（正定），並於 principal axes 下滿足**三角不等式** $I_{jj} + I_{kk} \geq I_{ii}$ 對所有 $\{i,j,k\}$ 的排列都成立（等價於 **pseudo-inertia matrix $\succeq 0$** 的 LMI 形式，見 Traversaro, Prete & Nori 2016、Wensing, Kim & Slotine 2017；註：$\text{tr}(I_i) > \lambda_{\max}$ 只是此條件的必要弱化，單獨使用會漏掉物理上不可實現的 inertia）
 - 套件：SciPy `cvxpy` + SDP solver (Mosek / SCS)
 
 **Step 8：交叉驗證**

@@ -207,7 +207,7 @@ Thread A (producer):          Thread B (consumer):
 
 ### 為什麼不全用 seq_cst
 
-`seq_cst` 在 ARM 架構上需要完整的 memory barrier（`dmb ish`），代價約 10-40 ns。硬即時 1 kHz 迴圈中每個 atomic 操作都用 `seq_cst` 會積少成多。用 `acquire/release` 配對已足夠保證正確性，且開銷更低。
+`seq_cst` 在 ARMv8 上，**純 load/store 與 acquire/release 使用相同的 `LDAR`/`STLR` 指令、沒有額外 barrier 成本**；差異主要在 seq_cst 的 **RMW**（`fetch_add`、`exchange`）會多一道 `DMB ISH` 全屏障（~10-40 ns），以及 seq_cst 對編譯器排序的更嚴格限制會間接影響 pipeline。硬即時 1 kHz 迴圈中若有高頻 atomic RMW，降為 acquire-release 可省掉 DMB；一般 lock-free 結構 acquire-release 配對已足夠。（詳見 Ch03 memory order 對應表）
 
 </details>
 

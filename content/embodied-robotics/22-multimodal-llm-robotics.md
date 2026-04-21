@@ -120,7 +120,7 @@ RT-2 / OpenVLA 等論文的實驗顯示兩條定性趨勢，**但目前沒有已
 
 - **模型 scaling**：RT-2 論文比較了不同規模的 VLM backbone（PaLM-E 12B、PaLI-X 5B、PaLI-X 55B 等），更大的模型在 emergent / unseen 任務上明顯更好。但原文用的是個別任務的絕對百分比（例如某類 unseen 物體 +20–30 個百分點），**不是一個乾淨的「3×」倍率**，也不是連續 scaling 曲線
 - **資料 scaling**：從數萬到 ~130K 真機 episodes，in-distribution 任務成功率明顯上升；但 unseen 的泛化能力主要來自 VLM 預訓練的語義知識，而非多收機器人資料
-- **資料獲取速度的結構性瓶頸**：每台機器人每天約收集 100–200 episodes，線性成長；Open X-Embodiment 靠 22 個機構聯合才湊到 ~1M — 這個量級在 LLM 眼裡仍是極小
+- **資料獲取速度的結構性瓶頸**：每台機器人每天約收集 100–200 episodes，線性成長；Open X-Embodiment 靠 **21 個機構、涵蓋 22 種 robot embodiments** 聯合才湊到 ~1M — 這個量級在 LLM 眼裡仍是極小
 
 ### 數據效率的四條路
 
@@ -336,7 +336,7 @@ class HierarchicalAgent:
 
 2. **「Foundation Model 不會幻覺，可以直接信任規劃結果」** — LLM 會自信地輸出物理上不可行的計劃（「把球放進比球小的杯子」）。物理幻覺比語言幻覺更危險 — 語言幻覺只是講錯話，物理幻覺會撞壞機器人或傷人。**正確理解**：LLM 輸出和真機執行之間**必須有安全過濾層** — affordance checking + 碰撞檢測 + workspace boundary + CBF 硬約束。
 
-3. **「不需要安全兜底，模型夠大就行」** — 即使是 55B 參數的 RT-2，在 unseen 場景仍有 25% 失敗率。模型不確定性高的時候，如果沒有 safety monitor，機器人會繼續執行高風險動作。**正確理解**：模型越大越好，但安全保證不能靠模型本身 — CBF、碰撞檢測、不確定性閾值是必須的工程層。
+3. **「不需要安全兜底，模型夠大就行」** — 即使是 55B 參數的 RT-2-PaLI-X，在 unseen 場景（新物體 / 新背景 / 新語言指令）**成功率約 62%，即仍有 ~38% 失敗率**。模型不確定性高的時候，如果沒有 safety monitor，機器人會繼續執行高風險動作。**正確理解**：模型越大越好，但安全保證不能靠模型本身 — CBF、碰撞檢測、不確定性閾值是必須的工程層。
 
 4. **「大模型萬能，PID 已經過時」** — 在精確力控（裝配、拋光）、高頻追蹤（CNC 加工）、確定性保證（醫療手術）場景，PID/MPC 比任何 learned policy 都更可靠和可驗證。**正確理解**：大模型解決語義理解和泛化問題，傳統控制解決精確、可靠、可驗證問題。兩者互補，不是替代。
 
@@ -433,5 +433,5 @@ class HierarchicalAgent:
 - **OpenVLA (Stanford + UC Berkeley + TRI + MIT + Google DeepMind, 2024)** — Kim et al. 領銜的多機構協作，基於 Llama 2 7B 的開源 VLA，展示用開源 LLM 做 VLA 的可行性
 - **Hafner et al.,《DreamerV3》(2023)** — World model SOTA，latent space model-based RL，sim 和 real 上均有展示
 - **Liang et al.,《Code as Policies》(2023)** — LLM 生成 Python 程式碼作為機器人策略，靈活但需嚴格 sandbox
-- **Open X-Embodiment Collaboration (2024)** — 22 機構聯合數據集，證明 cross-embodiment transfer 可行，VLA scaling 基礎
+- **Open X-Embodiment Collaboration (2024)** — **21 機構、22 種 robot embodiments** 聯合數據集，證明 cross-embodiment transfer 可行，VLA scaling 基礎
 - **Driess et al.,《PaLM-E: An Embodied Multimodal Language Model》(2023)** — 562B 參數的 embodied LLM，展示了 scale 對 embodied reasoning 的影響

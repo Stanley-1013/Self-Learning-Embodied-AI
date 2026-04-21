@@ -269,13 +269,13 @@ $$
 \mathrm{Ad}_{T_{AB}} = \begin{bmatrix} R & 0 \\ \hat{p} R & R \end{bmatrix} \qquad (V_A = \mathrm{Ad}_{T_{AB}} V_B)
 $$
 
-where $\hat{p}$ is the skew-symmetric matrix of the translation vector. Wrenches are dual to twists and therefore transform **by $\mathrm{Ad}^T$ (contravariant direction)**:
+where $\hat{p}$ is the skew-symmetric matrix of the translation vector. Wrenches are dual to twists; by power-invariance ($F^T V$ same in both frames), **wrenches transform via $\mathrm{Ad}^T$ in the OPPOSITE direction from twists**:
 
 $$
-W_A = \mathrm{Ad}_{T_{AB}}^T \cdot W_B
+W_B = \mathrm{Ad}_{T_{AB}}^T \cdot W_A
 $$
 
-In code you construct $\mathrm{Ad}_T$ once and use `Ad_T.transpose()` whenever you conjugate a wrench / stiffness.
+**Sanity check** (pure rotation, $p = 0$): $\mathrm{Ad}^T = \mathrm{diag}(R^T, R^T)$ so $W_B = R^T W_A$. If frame $B$ is rotated by $R$ relative to $A$, a force in $A$ coords expressed in $B$ is indeed $R^T W_A$ ✓. The reverse $W_A = \mathrm{Ad}^T W_B$ would give the wrong direction. In code you construct $\mathrm{Ad}_T$ once and use `Ad_T.transpose()` when conjugating; the stiffness sandwich $K_{\text{tcp}} = \mathrm{Ad}_T^T K_{\text{flange}} \mathrm{Ad}_T$ is robust to this convention.
 
 **Trap**: a pure force $f$, through the $\hat{p} R \cdot f$ block, **couples out an extra moment** $m$ (lever-arm effect). Developers who ignore this term issue commands that are simply wrong.
 

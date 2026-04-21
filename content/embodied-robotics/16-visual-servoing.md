@@ -77,12 +77,12 @@ $$
 **3. PBVS 控制律**：
 
 $$
-v_c = -\lambda \begin{pmatrix} {^{c^*}}t_c \\ \theta u \end{pmatrix}
+v_c = -\lambda \begin{pmatrix} R^T \cdot {^{c^*}}t_c \\ \theta u \end{pmatrix}
 $$
 
-其中 $[R, {^{c^*}}t_c] = {^{c^*}}T_c = ({^c}T_{c^*})^{-1}$ — **當前相機位姿在目標（期望）相機座標系中的表示**；$\theta u$ 為 $R$ 對應的 axis-angle（角度 × 軸向）。
+其中 $[R, {^{c^*}}t_c] = {^{c^*}}T_c = ({^c}T_{c^*})^{-1}$（**當前相機位姿在目標座標系中的表示**），$R$ 是 current → target 的旋轉矩陣；$\theta u$ 為 $R$ 對應的 axis-angle。**`R^T` 至關重要** — 它把平移向量從目標座標系 $c^*$ 轉回相機自身座標系 $c$，使 $v_c$ 的平移分量與角速度 $\theta u$ 在同一 frame（Chaumette & Hutchinson 2006, Eq. 23-27 的第二種選擇）。
 
-**物理意義**：直接在 3D 空間做比例控制 — 平移誤差 + 旋轉誤差（axis-angle 表示）；兩項必須在**同一座標系**（這裡統一在目標相機系 $c^*$）。軌跡在 Cartesian space 是直線，但精度完全依賴 $^cT_o$ 的估計品質與手眼標定精度。**座標系注意**：別把 `${^c}t$` 和 `${^{c^*}}t$` 兩個絕對平移向量相減 — frame 不一致、會和後續 axis-angle 旋轉項符號打架（參見 Chaumette & Hutchinson 2006, Eq. 22）。
+**物理意義**：直接在 3D 空間做比例控制 — 平移誤差 + 旋轉誤差（axis-angle 表示）。$v_c$ 是**在 current camera frame $c$ 下的 6-DoF 速度指令**，因此 translation 必須以 $R^T$ 轉回 $c$ frame。軌跡在 Cartesian space 是直線，但精度完全依賴 $^cT_o$ 的估計品質與手眼標定精度。**座標系陷阱**：絕不能把 `${^c}t$` 和 `${^{c^*}}t$` 兩個絕對平移向量相減 — frame 不一致、符號會和 axis-angle 旋轉項打架。
 
 **4. 手眼標定的核心方程（Tsai-Lenz 1989）**：
 

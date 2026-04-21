@@ -680,10 +680,10 @@ where $S_p$ is separation distance, $S_B, S_R, S_C$ are robot braking distance, 
   $$
 
 **Null-space optimization (7-DoF redundancy core)**:
-- **Project $(\mathbf{I} - \mathbf{J}^+ \mathbf{J}) \cdot \boldsymbol{\tau}_{\text{avoid}}$ onto null space**
+- **Torque-space projection**: $(\mathbf{I} - \mathbf{J}^\top \mathbf{J}^{+\top}) \cdot \boldsymbol{\tau}_{\text{avoid}}$ projects torques onto the null space of the end-effector wrench mapping (note: the **velocity null-space projector** $(\mathbf{I} - \mathbf{J}^+\mathbf{J})$ is for $\dot q$; the **torque null-space projector** $(\mathbf{I} - \mathbf{J}^\top \mathbf{J}^{+\top})$ is for $\tau$ — they are transposes of each other)
 - Worker pushes manipulator elbow → **elbow yields compliantly, but the cup held at the end effector does not move a millimeter**
 - Main task (end-effector pose) and avoidance (joint-level) fully decoupled
-- Math: $\mathbf{J} \cdot (\mathbf{I} - \mathbf{J}^+ \mathbf{J}) = 0$ → null-space motion does not affect the end effector
+- Math: $\mathbf{J}^{+\top} \mathbf{J}^\top \tau_{\text{null}} = 0$ means null-space torques produce no end-effector wrench → cup stays still
 
 **Interview answer for "HRI certification core"**:
 - Cobot (UR / KUKA iiwa / Franka Panda) customers pay for **safety**

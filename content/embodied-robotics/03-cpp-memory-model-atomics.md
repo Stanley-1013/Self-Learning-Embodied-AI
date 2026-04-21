@@ -494,7 +494,7 @@ void control_loop(SensorFusion& fusion) {
    - 控制 thread 用 `load(active_idx, acquire)` 讀取 — acquire 保證看到完整資料
    - **不用 seq_cst**：每個 sensor 獨立，不需要跨 sensor 的全局排序
 4. **False sharing 防護**：3 個 sensor 的 atomic index 用 `alignas(64)` 隔到不同 cache line
-5. **ARM 效能分析**：3 sensor × 1 kHz = 3000 次 acquire load/s，每次 `LDAR` ≈ 幾 cycles；若改 seq_cst 需 `DMB` ≈ 50–100 cycles → 每秒浪費 15–30 萬 cycles
+5. **ARM 效能分析**：3 sensor × 1 kHz = 3000 次 acquire load/s，每次 `LDAR` ≈ 幾 cycles；在 ARMv8 上**單純 seq_cst load/store 與 acquire/release 產生相同指令** (`LDAR`/`STLR`)，沒有額外 barrier 成本；**差別主要出現在 seq_cst 的 RMW**（`fetch_add`/`exchange`）會多一道 `DMB ISH`（~50-100 cycles），以及 seq_cst 對編譯器排序的更嚴格限制間接影響 pipeline
 6. **陷阱**：sensor 寫入太慢（如 Camera 30 Hz），控制端連續 33 次讀到同一幀 — 正常，但要用 timestamp 偵測「資料太舊」的情況
 
 **面試官想聽到**：per-sensor double buffer + acquire-release 的設計，能解釋為什麼不用 seq_cst（ARM 成本），以及如何處理 sensor 頻率不一致的問題。
@@ -510,7 +510,7 @@ void control_loop(SensorFusion& fusion) {
    - 獨立計數器/統計 → 降級為 `relaxed`
    - 生產者-消費者模式（flag、index）→ 降級為 `acquire-release`
    - 確實需要全局排序的（極少）→ 保留 `seq_cst`
-3. **實測效果**：ARM 上 relaxed store 是普通 `STR`，release 是 `STLR`，seq_cst 是 `STLR + DMB`。從 seq_cst 降到 acquire-release，barrier 指令減少 50%+
+3. **實測效果**：ARMv8 上 relaxed store 是普通 `STR`，release/seq_cst **純 store 都是 `STLR`**（沒差別）；效能差異主要來自 **seq_cst 的 RMW 操作**（`LDAXR/STLXR` 迴圈 + `DMB ISH`）與 seq_cst 對編譯器排序的更嚴格限制。若迴圈內有 atomic RMW，從 seq_cst 降為 acquire-release 省掉 `DMB ISH` 可量測
 4. **驗證正確性**：降級後用 `ThreadSanitizer` + ARM 真機壓力測試，確保沒有引入 data race
 5. **系統層面**：考慮 fence batching — 多個 relaxed 操作後用一個 `atomic_thread_fence(release)` 統一發布
 
@@ -520,7 +520,7 @@ void control_loop(SensorFusion& fusion) {
 
 ## 面試角度
 
-1. **拒絕無腦 seq_cst** — 測的是對硬體成本的理解。**帶出**：「在 ARM 平台上我會預設使用 acquire-release，因為 seq_cst 的 DMB 全屏障代價比 x86 大一個數量級。只有當程式邏輯真正需要全局一致排序時才用 seq_cst。」
+1. **拒絕無腦 seq_cst** — 測的是對硬體成本的理解。**帶出**：「在 ARMv8 上，**純 seq_cst load/store 與 acquire/release 其實產生相同的 `LDAR`/`STLR` 指令、沒有差別**；真正差異在 seq_cst 的 **RMW**（`fetch_add`、`exchange`）會多一道 `DMB ISH` 全屏障，以及 seq_cst 對編譯器排序的更嚴格限制。x86 上 seq_cst store 則需 `mfence`。大多數 lock-free 結構 acquire-release 已足夠，只有當程式邏輯真需要全局一致排序時才用 seq_cst。」
 
 2. **ABA + Memory Reclamation** — 測的是 lock-free 程式設計的深度。**帶出**：「Lock-free 資料結構最容易踩的坑是 ABA 問題。CAS 只比較值，不知道值是否曾經變過。解法是 tagged pointer 或 hazard pointer — 前者簡單但需要 128-bit CAS，後者更通用但實作複雜。」
 

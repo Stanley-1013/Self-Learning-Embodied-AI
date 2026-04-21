@@ -397,20 +397,23 @@ def train_dqn(env_name="CartPole-v1", episodes=1000, batch_size=64,
                     action = q_values.argmax().item()
 
             next_state, reward, terminated, truncated, _ = env.step(action)
-            done = terminated or truncated
-            buffer.push(state, action, reward, next_state, float(done))
+            # Gymnasium API：bootstrap mask 只用 `terminated`（真正吸收態），
+            # `truncated`（time-limit）時 MDP 仍在繼續，V(s') 還是要 bootstrap；
+            # replay buffer 因此存 `terminated` 而非 `done`，否則靠近截斷處的 Q 會系統性低估
+            done = terminated or truncated   # 只用於 episode loop 控制
+            buffer.push(state, action, reward, next_state, float(terminated))
             state = next_state
             total_reward += reward
 
             # 經驗夠多才開始訓練
             if len(buffer) >= batch_size:
-                s, a, r, ns, d = buffer.sample(batch_size)
+                s, a, r, ns, t = buffer.sample(batch_size)   # t = terminated mask, NOT done
                 # 當前 Q 值
                 current_q = q_net(s).gather(1, a.unsqueeze(1)).squeeze()
                 # 目標 Q 值（用 target network 算，更穩定）
                 with torch.no_grad():
                     max_next_q = target_net(ns).max(1)[0]
-                    target_q = r + gamma * max_next_q * (1 - d)
+                    target_q = r + gamma * max_next_q * (1 - t)   # 只遮 terminated，不遮 truncated
                 # TD loss + gradient clip
                 loss = nn.MSELoss()(current_q, target_q)
                 optimizer.zero_grad()

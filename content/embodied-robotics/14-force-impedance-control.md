@@ -269,13 +269,13 @@ $$
 \mathrm{Ad}_{T_{AB}} = \begin{bmatrix} R & 0 \\ \hat{p} R & R \end{bmatrix} \qquad (V_A = \mathrm{Ad}_{T_{AB}} V_B)
 $$
 
-其中 $\hat{p}$ 是平移向量的反對稱矩陣。Wrench 是 twist 的對偶，**以 $\mathrm{Ad}^T$ 反向變換**：
+其中 $\hat{p}$ 是平移向量的反對稱矩陣。Wrench 是 twist 的對偶 — 由功率不變性 $F^T V$（A 與 B frame 下功率相同）可得 **wrench 以 $\mathrm{Ad}^T$ 向「相反方向」變換**：
 
 $$
-W_A = \mathrm{Ad}_{T_{AB}}^T \cdot W_B
+W_B = \mathrm{Ad}_{T_{AB}}^T \cdot W_A
 $$
 
-也就是程式碼只需建構 $\mathrm{Ad}_T$ 一次、共軛轉換時套 `Ad_T.transpose()` 即可。
+**方向驗證**（純旋轉 $p = 0$）：$\mathrm{Ad}^T = \mathrm{diag}(R^T, R^T)$，所以 $W_B = R^T \cdot W_A$。物理上若 B 座標系對 A 旋轉了 $R$，A frame 的力在 B frame 下的分量正是 $R^T W_A$ ✓（若反向寫成 $W_A = \mathrm{Ad}^T W_B$，則得 $W_A = R^T W_B$，與物理不符）。程式碼只需建構 $\mathrm{Ad}_T$ 一次、共軛轉換時套 `Ad_T.transpose()` 即可；剛度共軛 $K_{\text{tcp}} = \mathrm{Ad}_T^T K_{\text{flange}} \mathrm{Ad}_T$ 的 sandwich 形式對此方向慣例是穩健的。
 
 **陷阱**：單純的力 $f$ 經過 $\hat{p} R \cdot f$ 這一塊會**耦合出額外力矩** $m$（力臂效應）！開發者忽略這項 → 指令完全錯誤。
 

@@ -287,63 +287,6 @@ The segment time $T_i$ is also a decision variable. Practical approach:
 
 </details>
 
-<details>
-<summary>Deep dive: TrajOpt frameworks compared, quick reference (CHOMP / STOMP / TrajOpt SQP)</summary>
-
-### CHOMP (Covariant Hamiltonian Optimization)
-
-Discretize the trajectory into a waypoint vector $\xi \in \mathbb{R}^{N \times n}$, gradient descent:
-
-$$
-\xi_{i+1} = \xi_i - \eta \cdot A^{-1} \nabla U(\xi_i)
-$$
-
-- **Objective** $U = U_{\text{smooth}} + U_{\text{obstacle}}$
-- **The "covariant" key**: $A^{-1}$ is a Riemannian metric matrix based on trajectory differences, spreading energy smoothly along the trajectory **independent of waypoint density**
-- **Obstacle avoidance**: SDF gradient pushes waypoints away
-- **Weakness**: avoidance is a **soft constraint** → grazing possible; requires differentiable cost → can't handle non-smooth cost
-
-### STOMP (Stochastic Trajectory Optimization)
-
-**No gradient computation required**:
-1. Add smooth Gaussian noise around the reference trajectory → generate $K$ candidate trajectories $\{\xi^{(k)}\}$
-2. Evaluate cost $S^{(k)}$ for each
-3. Exponentially weighted average (same family as Softmax / MPPI): $\xi_{\text{new}} = \sum_k \frac{e^{-S^{(k)}/\lambda}}{\sum_j e^{-S^{(j)}/\lambda}} \xi^{(k)}$
-
-**Killer app**: CHOMP needs SDF gradients; for **self-collision, discrete collision detection, avoiding camera occlusion** and other non-smooth cost, gradients are 0 or infinite → CHOMP dies instantly. STOMP handles non-differentiable cost perfectly via random sampling.
-
-### TrajOpt (UC Berkeley, John Schulman)
-
-Strict **SQP** formulation with **convexification**: first-order Taylor expansion of the obstacle SDF
-
-$$
-\text{dist}(x_i) \approx \text{dist}(x_{i,0}) + J_{\text{dist}}(x_{i,0}) \cdot \Delta x_i \geq d_{\text{safe}}
-$$
-
-→ linear inequality constraints, solved iteratively inside a Trust Region.
-
-**Hard-constraint king**: as long as SQP finds a solution, the trajectory is **guaranteed collision-free**; continuous-time collision detection (swept volume) prevents "sampling skipping through a narrow slot".
-
-### Scenario decision tree
-
-| Scenario | First choice | Why |
-|------|------|-------|
-| Grabbing a book from a crowded shelf (narrow space, hard constraint) | **TrajOpt** | SQP hard constraint, no penetration |
-| Avoiding camera occlusion, avoiding liquid splash (non-differentiable cost) | **STOMP** | Sampling handles non-smooth costs |
-| Post-processing a coarse OMPL trajectory | **CHOMP** | Covariant gradient straightens polylines in milliseconds |
-
-### MoveIt! 2 YAML configuration
-
-```yaml
-planning_pipelines:
-  pipeline_names: [ompl, chomp, stomp]
-ompl:
-  request_adapters: |
-    default_planner_request_adapters/AddTimeOptimalParameterization
-    default_planner_request_adapters/CHOMPOptimizingAdapter
-```
-
-</details>
 
 ## Intermediate Concepts: Time-Optimal, Contact-Aware, and Learning-based Generation
 

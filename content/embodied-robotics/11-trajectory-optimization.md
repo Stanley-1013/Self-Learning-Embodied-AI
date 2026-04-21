@@ -287,63 +287,6 @@ $T_i$（每段時間）也是決策變數。實務做法：
 
 </details>
 
-<details>
-<summary>深入：TrajOpt 三框架對比（CHOMP / STOMP / TrajOpt SQP）</summary>
-
-### CHOMP (Covariant Hamiltonian Optimization)
-
-把軌跡離散化為 waypoints 向量 $\xi \in \mathbb{R}^{N \times n}$，梯度下降：
-
-$$
-\xi_{i+1} = \xi_i - \eta \cdot A^{-1} \nabla U(\xi_i)
-$$
-
-- **目標函數** $U = U_{\text{smooth}} + U_{\text{obstacle}}$
-- **"Covariant" 關鍵**：$A^{-1}$ 是基於軌跡差分的黎曼度量矩陣，把能量平滑散佈整條軌跡，**不受參數化點密度影響**
-- **避障**：SDF（signed distance field）梯度推開 waypoints
-- **弱點**：避障是**軟約束** → 可能擦撞；梯度需可微 → 碰不了 non-smooth cost
-
-### STOMP (Stochastic Trajectory Optimization)
-
-**不需計算梯度**：
-1. 在參考軌跡周圍加平滑高斯雜訊 → 生成 $K$ 條候選軌跡 $\{\xi^{(k)}\}$
-2. 評估每條軌跡的 cost $S^{(k)}$
-3. 指數加權（與 Softmax / MPPI 同源）：$\xi_{\text{new}} = \sum_k \frac{e^{-S^{(k)}/\lambda}}{\sum_j e^{-S^{(j)}/\lambda}} \xi^{(k)}$
-
-**殺手應用**：CHOMP 需 SDF 梯度；對**自碰撞、離散碰撞檢測、避開相機遮擋**這類 non-smooth cost，梯度為 0 或無窮大 → CHOMP 當場廢掉。STOMP 靠隨機採樣完美處理 non-differentiable cost。
-
-### TrajOpt (UC Berkeley, John Schulman)
-
-嚴格 **SQP** 公式化，含 **Convexification 凸化**：障礙 SDF 一階泰勒展開
-
-$$
-\text{dist}(x_i) \approx \text{dist}(x_{i,0}) + J_{\text{dist}}(x_{i,0}) \cdot \Delta x_i \geq d_{\text{safe}}
-$$
-
-→ 線性不等式約束，可信賴域 (Trust Region) 內迭代求解。
-
-**硬約束王者**：只要 SQP 有解，軌跡**絕對無碰撞**；連續時間碰撞檢測（swept volume）避免「時間取樣漏掉細縫穿牆」。
-
-### 場景選型決策樹
-
-| 場景 | 首選 | 為什麼 |
-|------|------|-------|
-| 擁擠書架取書（狹窄空間硬約束） | **TrajOpt** | SQP 硬約束不穿模 |
-| 避相機遮擋視野、避液體潑灑（不可微 cost） | **STOMP** | 採樣暴力處理 non-smooth |
-| OMPL 粗軌跡平滑後處理 | **CHOMP** | 共變梯度毫秒內拉平折線 |
-
-### MoveIt! 2 YAML 配置
-
-```yaml
-planning_pipelines:
-  pipeline_names: [ompl, chomp, stomp]
-ompl:
-  request_adapters: |
-    default_planner_request_adapters/AddTimeOptimalParameterization
-    default_planner_request_adapters/CHOMPOptimizingAdapter
-```
-
-</details>
 
 ## 中階概念：Time-Optimal、Contact-Aware 與學習式生成
 

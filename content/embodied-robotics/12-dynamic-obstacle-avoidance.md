@@ -679,10 +679,10 @@ $$
   $$
 
 **零空間優化（7-DoF 冗餘機械臂核心）**：
-- **投影 $(\mathbf{I} - \mathbf{J}^+ \mathbf{J}) \cdot \boldsymbol{\tau}_{\text{avoid}}$ 到零空間**
+- **扭矩空間投影**：$(\mathbf{I} - \mathbf{J}^\top \mathbf{J}^{+\top}) \cdot \boldsymbol{\tau}_{\text{avoid}}$ 投影到末端不感知的零空間（注意：**速度零空間投影** $(\mathbf{I} - \mathbf{J}^+\mathbf{J})$ 用於 $\dot q$、**扭矩零空間投影** $(\mathbf{I} - \mathbf{J}^\top \mathbf{J}^{+\top})$ 才是 $\tau$ 用的，兩者互為轉置）
 - 工人推機械臂手肘 → **手肘柔順退讓，但末端夾爪拿的水杯紋絲不動**
 - 主任務（末端位姿）與避障（關節層）完全解耦
-- 數學：$\mathbf{J} \cdot (\mathbf{I} - \mathbf{J}^+ \mathbf{J}) = 0$ → 零空間運動不影響末端
+- 數學：$\mathbf{J}^{+\top} \mathbf{J}^\top \cdot \tau_{null} = 0$ 意味零空間 torque 不引起末端 wrench → 末端不動
 
 **「HRI 認證核心」答題**：
 - Cobots（UR / KUKA iiwa / Franka Panda）客戶買單的是**安全**
@@ -703,8 +703,8 @@ for (int i = 0; i < critical_links.size(); ++i) {
         tau_avoid += J_i.transpose().topRows(3) * F_rep;
     }
 }
-// 零空間投影
-Eigen::MatrixXd N = I - J_pinv * J;  // null-space projector
+// 零空間投影（torque-space，非 velocity-space）
+Eigen::MatrixXd N = I - J.transpose() * J_pinv.transpose();  // torque null-space projector
 tau_null = N * tau_avoid;
 robot.setJointTorques(tau_task + tau_null);  // 主任務 + 零空間避障疊加
 ```
