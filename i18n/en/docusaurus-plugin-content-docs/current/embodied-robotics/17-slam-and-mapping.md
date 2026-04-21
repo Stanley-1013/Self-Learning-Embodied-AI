@@ -122,7 +122,7 @@ $$
 H = \sum_{(i,j)} J_{ij}^T \Omega_{ij} J_{ij}, \quad b = \sum_{(i,j)} J_{ij}^T \Omega_{ij} e_{ij}
 $$
 
-**Physical source of Hessian sparsity**: each edge $(i,j)$'s Jacobian $J_{ij}$ has nonzero partial derivatives only for nodes $i$ and $j$. Therefore $J_{ij}^T \Omega_{ij} J_{ij}$ affects only the $(i,i)$, $(i,j)$, $(j,i)$, $(j,j)$ blocks of $H$. In a typical SLAM graph, each node connects only to temporally adjacent nodes and a handful of loop closure nodes → $H$ is a banded sparse matrix solvable via sparse Cholesky (e.g., CHOLMOD) in $O(n)$ to $O(n^{1.5})$ time.
+**Physical source of Hessian sparsity**: each edge $(i,j)$'s Jacobian $J_{ij}$ has nonzero partial derivatives only for nodes $i$ and $j$. Therefore $J_{ij}^T \Omega_{ij} J_{ij}$ affects only the $(i,i)$, $(i,j)$, $(j,i)$, $(j,j)$ blocks of $H$. In a typical SLAM graph, each node connects only to temporally adjacent nodes and a handful of loop closure nodes → $H$ is a banded sparse matrix solvable via sparse Cholesky (e.g., CHOLMOD) **far faster than dense $O(n^3)$**; actual complexity depends on fill-in and loop-closure density (2D grid graphs approach $O(n^{1.5})$; 3D SLAM with dense loop closures degrades toward $O(n^2)$, still far below dense).
 
 **iSAM2 incremental updates**: when a new constraint arrives, the Bayes Tree only recomputes the affected sub-branches, avoiding a full recomputation of $H$ → enabling real-time incremental SLAM.
 

@@ -114,7 +114,7 @@ $$
 
 **Forward pass**（從 base → end-effector，$i = 1 \ldots n$）：
 
-> 向量 convention（Featherstone / Pinocchio 標準）：**每個下標變數 $v_i$ 表達在對應的 frame $i$**（例如 $\omega_{i-1}$ 在 frame $i-1$、$\omega_i$ 在 frame $i$）；$R_i$ 是 frame $i-1 \to i$ 的旋轉矩陣（因此 $R_i^T$ 把 frame $i-1$ 的向量變換回 frame $i$）；$\hat{z} = [0,0,1]^T$ 代表 joint $i$ 自身 frame 的旋轉軸；$r_i$ 是 frame $i-1$ 原點指向 frame $i$ 原點的向量（表達在 frame $i$）。重力透過 base pseudo-acceleration $\ddot p_0 = -g$ 注入，後續公式不再顯式列重力項。
+> 向量 convention（Featherstone / Pinocchio 標準）：**每個下標變數 $v_i$ 表達在對應的 frame $i$**（例如 $\omega_{i-1}$ 在 frame $i-1$、$\omega_i$ 在 frame $i$）；$R_i$ 是 frame $i-1 \to i$ 的旋轉矩陣（因此 $R_i^T$ 把 frame $i-1$ 的向量變換回 frame $i$）；$\hat{z} = [0,0,1]^T$ **在 frame $i-1$ 或 frame $i$ 都是 $[0,0,1]$**（joint 軸與 DH 轉軸對齊），因此 $\omega_{i-1} + \dot q_i \hat z$ 的加法在 frame $i-1$ 下進行、再由 $R_i^T$ 整個轉回 frame $i$；$r_i$ 是 frame $i-1$ 原點指向 frame $i$ 原點的向量（表達在 frame $i$）。重力透過 base pseudo-acceleration $\ddot p_0 = -g$ 注入，後續公式不再顯式列重力項。
 
 $$
 \omega_i = R_i^T (\omega_{i-1} + \dot{q}_i \hat{z})

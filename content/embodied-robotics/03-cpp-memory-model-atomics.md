@@ -56,7 +56,7 @@ $$
 
 ### `std::atomic<T>` 與 CAS
 
-`std::atomic<T>` 透過硬體指令（`lock cmpxchg` on x86、`ldxr/stxr` on ARM）實現原子性，**無需 mutex**。
+`std::atomic<T>` 對齊時的**純 load/store 本身已原子**（x86 `MOV` / ARM `LDR`/`STR` 單指令完成），不需額外指令；**RMW 操作**（`fetch_add`、`exchange`、`compare_exchange_*`）才會用到硬體提供的 RMW 原語（x86 `lock cmpxchg` / ARMv8 `LDXR/STXR` 或 `CAS`），**全程無需 mutex**。
 
 **CAS（Compare-And-Swap）** 是 lock-free 資料結構的基石：
 

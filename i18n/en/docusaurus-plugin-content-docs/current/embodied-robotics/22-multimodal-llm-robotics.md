@@ -75,7 +75,7 @@ $$
 | LLM (GPT-4) | ~13T tokens | Web text |
 | VLM (LLaVA) | ~1.2M image-text pairs | Web images + annotations |
 | VLA (RT-2) | ~130K robot episodes | Real-robot operation (Google internal) |
-| VLA (Open X-Embodiment) | ~1M episodes | 22 robots, multi-institution |
+| VLA (Open X-Embodiment) | ~1M episodes | 21 institutions across 22 robot embodiments |
 
 The gap is 3-4 orders of magnitude. This is why VLAs must fine-tune from pre-trained VLMs rather than training from scratch.
 

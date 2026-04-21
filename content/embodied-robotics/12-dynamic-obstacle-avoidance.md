@@ -110,7 +110,7 @@ $$
 
 $$
 \boldsymbol{\tau}_{\text{avoid}} = \sum_i \mathbf{J}_i(q)^\top \cdot \mathbf{F}_{\text{rep},i}, \qquad
-\boldsymbol{\tau}_{\text{null}} = (\mathbf{I} - \mathbf{J}^+ \mathbf{J}) \cdot \boldsymbol{\tau}_{\text{avoid}}
+\boldsymbol{\tau}_{\text{null}} = (\mathbf{I} - \mathbf{J}^\top \mathbf{J}^{+\top}) \cdot \boldsymbol{\tau}_{\text{avoid}}
 $$
 
 **物理意義**：各連桿 Capsule 逼近障礙時算 3D 虛擬斥力 $\mathbf{F}_{\text{rep}}$；雅可比轉置把笛卡爾空間力映射為各關節避讓力矩。**7-DoF 冗餘機械臂核心**：投影到 $\mathbf{J}$ 零空間 → 手肘柔順退讓、末端夾爪拿的水杯紋絲不動 → 主任務與避障解耦。這就是 ISO 10218 / 15066 PLd 認證的數學骨架。

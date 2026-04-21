@@ -110,7 +110,7 @@ $$
 
 $$
 \boldsymbol{\tau}_{\text{avoid}} = \sum_i \mathbf{J}_i(q)^\top \cdot \mathbf{F}_{\text{rep},i}, \qquad
-\boldsymbol{\tau}_{\text{null}} = (\mathbf{I} - \mathbf{J}^+ \mathbf{J}) \cdot \boldsymbol{\tau}_{\text{avoid}}
+\boldsymbol{\tau}_{\text{null}} = (\mathbf{I} - \mathbf{J}^\top \mathbf{J}^{+\top}) \cdot \boldsymbol{\tau}_{\text{avoid}}
 $$
 
 **Physical meaning**: each link's Capsule approaching an obstacle generates a 3D virtual repulsive force $\mathbf{F}_{\text{rep}}$; the Jacobian transpose maps Cartesian forces to joint torques. **7-DoF redundancy core**: projected onto the Jacobian null space → elbow yields compliantly, the cup at the end effector stays perfectly still → main task decoupled from avoidance. This is the mathematical skeleton behind ISO 10218 / 15066 PLd certification.

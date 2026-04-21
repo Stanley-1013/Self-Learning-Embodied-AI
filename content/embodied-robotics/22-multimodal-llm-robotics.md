@@ -112,7 +112,7 @@ RT-2 / OpenVLA 等論文的實驗顯示兩條定性趨勢，**但目前沒有已
 | LLM (GPT-4) | ~13T tokens | 網路文本，可無限爬取 |
 | VLM (LLaVA) | ~1.2M 影像-文字對 | 網路影像 + 標註 |
 | VLA (RT-2) | ~130K episodes | 真機操作（Google 內部） |
-| VLA (Open X-Embodiment) | ~1M episodes | 22 個機器人、多機構聯合 |
+| VLA (Open X-Embodiment) | ~1M episodes | 21 機構、22 種 robot embodiments 聯合 |
 
 差距 3-4 個數量級。這就是為什麼 VLA 必須從預訓練 VLM 做 fine-tune，而不能從頭訓練。
 
