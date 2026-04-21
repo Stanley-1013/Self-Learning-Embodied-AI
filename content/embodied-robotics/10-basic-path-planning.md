@@ -939,7 +939,7 @@ def hybrid_a_star_expand(node, dt=0.3, v=1.0, L=2.5):
    - 檢查 `cost_scaling_factor` — 太小會讓遠離障礙物的地方也高 cost
 
 3. **解法**：**Global Costmap 引入平滑代價衰減梯度 (Cost Decay)**
-   - 公式（Nav2 `InflationLayer`）：$\text{Cost}(d) = (\text{LETHAL\_OBSTACLE} - 1) \cdot \exp(-\alpha \cdot (d - r_{\text{inscribed}})) = 253 \cdot \exp(-\alpha \cdot (d - r_{\text{inscribed}}))$，僅在 $r_{\text{inscribed}} < d \leq r_{\text{inflation}}$ 區間有效；$d \leq r_{\text{inscribed}}$ 直接設為 254（`LETHAL_OBSTACLE`）
+   - 公式（Nav2 `InflationLayer`）：$\text{Cost}(d) = (\text{INSCRIBED\_INFLATED\_OBSTACLE} - 1) \cdot \exp(-\alpha \cdot (d - r_{\text{inscribed}})) = 252 \cdot \exp(-\alpha \cdot (d - r_{\text{inscribed}}))$，僅在 $r_{\text{inscribed}} < d \leq r_{\text{inflation}}$ 區間有效；$0 < d \leq r_{\text{inscribed}}$ 設為 253（`INSCRIBED_INFLATED_OBSTACLE`）；$d = 0$（障礙格本身）設為 254（`LETHAL_OBSTACLE`）
    - $d$ 接近障礙 → 代價指數飆升 → 引導 A* 走通道中央
    - 典型值：`cost_scaling_factor: 3.0`, `inflation_radius: 0.55`（機器人半徑 0.22m 時）
 

@@ -937,7 +937,7 @@ def hybrid_a_star_expand(node, dt=0.3, v=1.0, L=2.5):
    - Check `cost_scaling_factor` — too small means even far-from-obstacle areas have high cost
 
 3. **Fix**: **Introduce a smooth cost-decay gradient in the Global Costmap**
-   - Formula (Nav2 `InflationLayer`): $\text{Cost}(d) = (\text{LETHAL\_OBSTACLE} - 1) \cdot \exp(-\alpha \cdot (d - r_{\text{inscribed}})) = 253 \cdot \exp(-\alpha \cdot (d - r_{\text{inscribed}}))$, valid only for $r_{\text{inscribed}} < d \leq r_{\text{inflation}}$; for $d \leq r_{\text{inscribed}}$ the cost is set directly to 254 (`LETHAL_OBSTACLE`)
+   - Formula (Nav2 `InflationLayer`): $\text{Cost}(d) = (\text{INSCRIBED\_INFLATED\_OBSTACLE} - 1) \cdot \exp(-\alpha \cdot (d - r_{\text{inscribed}})) = 252 \cdot \exp(-\alpha \cdot (d - r_{\text{inscribed}}))$, valid only for $r_{\text{inscribed}} < d \leq r_{\text{inflation}}$; for $0 < d \leq r_{\text{inscribed}}$ the cost is 253 (`INSCRIBED_INFLATED_OBSTACLE`); for $d = 0$ (the obstacle cell itself) it is 254 (`LETHAL_OBSTACLE`)
    - Near obstacle → cost skyrockets → A\* routed through corridor center
    - Typical values: `cost_scaling_factor: 3.0`, `inflation_radius: 0.55` (for robot radius 0.22m)
 
